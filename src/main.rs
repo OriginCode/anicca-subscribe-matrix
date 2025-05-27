@@ -157,7 +157,6 @@ async fn on_message(
         return Ok(());
     }
     info!("room = {}, event = {:?}", room.room_id(), event);
-    set_read_marker(room.clone(), event.event_id.clone());
     if room.state() != RoomState::Joined {
         info!("Ignoring: Current room state is {:?}.", room.state());
         return Ok(());
@@ -177,6 +176,7 @@ async fn on_message(
 
     let parsed_args = command::parse_args(&text.body);
     let res = if parsed_args.first().map(|x| x.as_str()) == Some(command::COMMAND_PREFIX) {
+        set_read_marker(room.clone(), event.event_id.clone());
         command::handle(
             &parsed_args,
             &context.data_dir,
