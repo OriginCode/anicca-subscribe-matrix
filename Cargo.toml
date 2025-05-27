@@ -1,0 +1,19 @@
+[package]
+name = "anicca-subscribe"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.38", features = ["derive"] }
+color-eyre = "0.6.4"
+eyre = "0.6.12"
+matrix-sdk = { version = "0.11.0", features = ["eyre"] }
+matrixbot-ezlogin = "0.2.6"
+reqwest = "0.12.15"
+rusqlite = "0.33.0"
+serde = "1.0"
+serde_json = "1.0"
+tokio = { version = "1.45.1", features = ["rt", "macros", "rt-multi-thread"] }
+tracing = "0.1.41"
+tracing-error = "0.2.1"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
