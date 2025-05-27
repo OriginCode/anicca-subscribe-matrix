@@ -30,8 +30,11 @@ pub async fn handle(
 ) -> Result<(String, Option<String>)> {
     if args.len() <= 1 {
         return Ok((
-            "No command provided. Type '> help' for available commands.".to_string(),
-            None,
+            "No command provided. Type `!anic help` for available commands.".to_owned(),
+            Some(
+                "No command provided. Type <code>!anic help</code> for available commands."
+                    .to_owned(),
+            ),
         ));
     }
 

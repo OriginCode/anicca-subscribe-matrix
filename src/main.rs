@@ -175,9 +175,10 @@ async fn on_message(
         unreachable!()
     };
 
-    let res = if text.body.starts_with(command::COMMAND_PREFIX) {
+    let parsed_args = command::parse_args(&text.body);
+    let res = if parsed_args.first().map(|x| x.as_str()) == Some(command::COMMAND_PREFIX) {
         command::handle(
-            &command::parse_args(&text.body),
+            &parsed_args,
             &context.data_dir,
             &event.sender,
             context.db.clone(),
