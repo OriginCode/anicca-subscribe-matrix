@@ -23,8 +23,10 @@ use matrix_sdk::{
 use rusqlite::Connection;
 use std::{
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 use tracing_subscriber::{EnvFilter, prelude::*};
 
@@ -32,6 +34,12 @@ mod cli;
 mod command;
 
 use cli::{Cli, Subcommands};
+
+#[derive(Clone)]
+struct Payload {
+    db: Arc<Mutex<Connection>>,
+    data_dir: PathBuf,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -102,7 +110,10 @@ async fn run(data_dir: &Path) -> Result<()> {
         .sync_once(&client, sync_settings.clone())
         .await?;
 
-    client.add_event_handler_context(data_dir.to_owned());
+    client.add_event_handler_context(Payload {
+        db: Arc::new(Mutex::new(Connection::open(data_dir.join("anicca.db"))?)),
+        data_dir: data_dir.to_owned(),
+    });
     client.add_event_handler(on_message);
     client.add_event_handler(on_utd);
 
@@ -139,7 +150,7 @@ async fn on_message(
     event: OriginalSyncRoomMessageEvent,
     room: Room,
     client: Client,
-    data_dir: Ctx<PathBuf>,
+    context: Ctx<Payload>,
 ) -> Result<()> {
     if event.sender == client.user_id().unwrap() {
         // Ignore my own message
@@ -167,9 +178,9 @@ async fn on_message(
     let res = if text.body.starts_with(command::COMMAND_PREFIX) {
         command::handle(
             &command::parse_args(&text.body),
-            &data_dir,
+            &context.data_dir,
             &event.sender,
-            Connection::open(data_dir.join("anicca.db"))?,
+            context.db.clone(),
         )
         .await?
     } else {

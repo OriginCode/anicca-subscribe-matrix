@@ -2,7 +2,8 @@ use anicca_subscribe::anicca::Anicca;
 use eyre::Result;
 use matrix_sdk::ruma::UserId;
 use rusqlite::Connection;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
+use tokio::sync::Mutex;
 
 pub const COMMAND_PREFIX: &str = "!anic";
 
@@ -10,7 +11,8 @@ pub fn parse_args(text: &str) -> Vec<String> {
     text.split(' ').map(|s| s.to_owned()).collect()
 }
 
-fn get_packages(user_id: &UserId, db_conn: &Connection) -> Result<Vec<String>> {
+async fn get_packages(user_id: &UserId, db_conn: Arc<Mutex<Connection>>) -> Result<Vec<String>> {
+    let db_conn = db_conn.lock().await;
     let mut stmt = db_conn.prepare("SELECT package FROM subscription WHERE user_id = ?1")?;
     let rows = stmt.query_map([user_id.as_str()], |row| row.get(0))?;
     let mut packages: Vec<String> = Vec::new();
@@ -24,7 +26,7 @@ pub async fn handle(
     args: &[String],
     data_dir: &Path,
     user_id: &UserId,
-    db_conn: Connection,
+    db_conn: Arc<Mutex<Connection>>,
 ) -> Result<(String, Option<String>)> {
     if args.len() <= 1 {
         return Ok((
@@ -56,7 +58,7 @@ pub async fn handle(
         }
         "ping" => Ok(("pong".to_string(), None)),
         "list" => {
-            let packages = get_packages(user_id, &db_conn)?;
+            let packages = get_packages(user_id, db_conn).await?;
             if packages.is_empty() {
                 Ok(("No package subscribed.".to_owned(), None))
             } else {
@@ -80,6 +82,7 @@ pub async fn handle(
                 ));
             }
             let packages: Vec<String> = args[2..].to_vec();
+            let db_conn = db_conn.lock().await;
             let mut stmt =
                 db_conn.prepare("INSERT INTO subscription (user_id, package) VALUES (?1, ?2)")?;
             for package in packages {
@@ -95,6 +98,7 @@ pub async fn handle(
                 ));
             }
             let packages: Vec<String> = args[2..].to_vec();
+            let db_conn = db_conn.lock().await;
             let mut stmt =
                 db_conn.prepare("DELETE FROM subscription WHERE user_id = ?1 AND package = ?2")?;
             for package in packages {
@@ -103,7 +107,7 @@ pub async fn handle(
             Ok(("Unsubscribed.".to_owned(), None))
         }
         "updates" => {
-            let packages = get_packages(user_id, &db_conn)?;
+            let packages = get_packages(user_id, db_conn).await?;
             let mut updates = Anicca::get_local_json(data_dir)
                 .await?
                 .get_updates(&packages)
