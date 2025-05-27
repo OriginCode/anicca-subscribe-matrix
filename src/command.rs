@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 pub const COMMAND_PREFIX: &str = "!anic";
 
 pub fn parse_args(text: &str) -> Vec<String> {
-    text.split(' ').map(|s| s.to_owned()).collect()
+    text.split_whitespace().map(|s| s.to_owned()).collect()
 }
 
 async fn get_packages(user_id: &UserId, db_conn: Arc<Mutex<Connection>>) -> Result<Vec<String>> {
@@ -28,7 +28,7 @@ pub async fn handle(
     user_id: &UserId,
     db_conn: Arc<Mutex<Connection>>,
 ) -> Result<(String, Option<String>)> {
-    if args.len() <= 1 {
+    if args.is_empty() {
         return Ok((
             "No command provided. Type `!anic help` for available commands.".to_owned(),
             Some(
@@ -38,7 +38,7 @@ pub async fn handle(
         ));
     }
 
-    match args[1].as_str() {
+    match args[0].as_str() {
         "help" => {
             let html_help_message = "Available commands:<br/>\
                                 <code>!anic help</code> - Show this help message<br/>\
@@ -78,13 +78,13 @@ pub async fn handle(
             }
         }
         "subscribe" => {
-            if args.len() < 3 {
+            if args.len() < 2 {
                 return Ok((
                     "Usage: `!anic subscribe <packages>`".to_owned(),
                     Some("Usage: <code>!anic subscribe &lt;packages&gt;</code>".to_owned()),
                 ));
             }
-            let packages: Vec<String> = args[2..].to_vec();
+            let packages: Vec<String> = args[1..].to_vec();
             let db_conn = db_conn.lock().await;
             let mut stmt =
                 db_conn.prepare("INSERT INTO subscription (user_id, package) VALUES (?1, ?2)")?;
@@ -94,13 +94,13 @@ pub async fn handle(
             Ok(("Subscribed.".to_owned(), None))
         }
         "unsubscribe" => {
-            if args.len() < 3 {
+            if args.len() < 2 {
                 return Ok((
                     "Usage: `!anic unsubscribe <packages>`".to_owned(),
                     Some("Usage: <code>!anic unsubscribe &lt;packages&gt;</code>".to_owned()),
                 ));
             }
-            let packages: Vec<String> = args[2..].to_vec();
+            let packages: Vec<String> = args[1..].to_vec();
             let db_conn = db_conn.lock().await;
             let mut stmt =
                 db_conn.prepare("DELETE FROM subscription WHERE user_id = ?1 AND package = ?2")?;
@@ -147,6 +147,6 @@ pub async fn handle(
                 ))
             }
         }
-        _ => Ok((format!("Unknown command: {}", args[1]), None)),
+        _ => Ok((format!("Unknown command: {}", args[0]), None)),
     }
 }

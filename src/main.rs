@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::registry()
         .with(tracing_error::ErrorLayer::default())
         .with({
-            let mut filter = EnvFilter::new("warn,matrixbot_ezlogin=debug");
+            let mut filter = EnvFilter::new("info,matrixbot_ezlogin=debug");
             if let Some(env) = std::env::var_os(EnvFilter::DEFAULT_ENV) {
                 for segment in env.to_string_lossy().split(',') {
                     if let Ok(directive) = segment.parse() {
@@ -175,8 +175,30 @@ async fn on_message(
     };
 
     let parsed_args = command::parse_args(&text.body);
-    let res = if parsed_args.first().map(|x| x.as_str()) == Some(command::COMMAND_PREFIX) {
+    let prefix = parsed_args.first().map(|x| x.as_str());
+    let display_name_prefix = client
+        .account()
+        .get_display_name()
+        .await?
+        .unwrap_or("anicca".to_owned())
+        + ": ";
+    info!("Got prefix: {:?}", prefix);
+    let res = if prefix == Some(command::COMMAND_PREFIX)
+        || prefix == client.user_id().map(|x| x.as_str())
+        || prefix == client.user_id().map(|x| format!("{}:", x)).as_deref()
+    {
         set_read_marker(room.clone(), event.event_id.clone());
+        command::handle(
+            &parsed_args[1..],
+            &context.data_dir,
+            &event.sender,
+            context.db.clone(),
+        )
+        .await?
+    } else if text.body.starts_with(&display_name_prefix) {
+        set_read_marker(room.clone(), event.event_id.clone());
+        let parsed_args =
+            command::parse_args(text.body.strip_prefix(&display_name_prefix).unwrap());
         command::handle(
             &parsed_args,
             &context.data_dir,
