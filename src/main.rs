@@ -182,7 +182,6 @@ async fn on_message(
         .await?
         .unwrap_or("anicca".to_owned())
         + ": ";
-    info!("Got prefix: {:?}", prefix);
     let res = if prefix == Some(command::COMMAND_PREFIX)
         || prefix == client.user_id().map(|x| x.as_str())
         || prefix == client.user_id().map(|x| format!("{}:", x)).as_deref()
@@ -199,6 +198,15 @@ async fn on_message(
         set_read_marker(room.clone(), event.event_id.clone());
         let parsed_args =
             command::parse_args(text.body.strip_prefix(&display_name_prefix).unwrap());
+        command::handle(
+            &parsed_args,
+            &context.data_dir,
+            &event.sender,
+            context.db.clone(),
+        )
+        .await?
+    } else if room.is_direct().await? {
+        set_read_marker(room.clone(), event.event_id.clone());
         command::handle(
             &parsed_args,
             &context.data_dir,

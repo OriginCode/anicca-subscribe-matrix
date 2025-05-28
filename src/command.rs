@@ -41,6 +41,7 @@ pub async fn handle(
     match args[0].as_str() {
         "help" => {
             let html_help_message = "Available commands:<br/>\
+                                Prefixing commands with <code>!anic</code> is not required for direct messages.<br/>\
                                 <code>!anic help</code> - Show this help message<br/>\
                                 <code>!anic list</code> - List subscribed packages<br/>\
                                 <code>!anic subscribe &lt;packages&gt;</code> - Subscribe to packages<br/>\
