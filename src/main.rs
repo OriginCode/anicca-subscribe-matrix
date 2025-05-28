@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::registry()
         .with(tracing_error::ErrorLayer::default())
         .with({
-            let mut filter = EnvFilter::new("info,matrixbot_ezlogin=debug");
+            let mut filter = EnvFilter::new("warn,matrixbot_ezlogin=debug");
             if let Some(env) = std::env::var_os(EnvFilter::DEFAULT_ENV) {
                 for segment in env.to_string_lossy().split(',') {
                     if let Ok(directive) = segment.parse() {
