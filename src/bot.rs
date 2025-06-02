@@ -76,6 +76,9 @@ async fn notify_user(client: Client, user_id: &UserId, pool: Pool, data_dir: &Pa
 
     if !updates.is_empty() {
         let (plain_updates, html_updates) = format_update_packages(&mut updates);
+        let header = "(Hourly Notification)";
+        let plain_updates = format!("{header}\n{plain_updates}");
+        let html_updates = format!("{header}<br/>{html_updates}");
         let content = RoomMessageEventContent::notice_html(plain_updates, html_updates);
         room.send(content).await?;
     }
