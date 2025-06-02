@@ -1,10 +1,10 @@
 use anicca_subscribe::anicca::Anicca;
 use deadpool_sqlite::Pool;
 use eyre::Result;
-use matrix_sdk::ruma::UserId;
+use matrix_sdk::ruma::{UserId, events::room::message::RoomMessageEventContent};
 use std::path::Path;
 
-use crate::bot::{Body, format_update_packages, get_packages};
+use crate::bot::{format_update_packages, get_packages};
 
 pub const COMMAND_PREFIX: &str = "!anic";
 
@@ -42,9 +42,9 @@ pub async fn handle(
     data_dir: &Path,
     user_id: &UserId,
     pool: Pool,
-) -> Result<Body> {
+) -> Result<RoomMessageEventContent> {
     if args.is_empty() {
-        return Ok(Body::Html(
+        return Ok(RoomMessageEventContent::notice_html(
             "No command provided. Type `!anic help` for available commands.".to_owned(),
             "No command provided. Type <code>!anic help</code> for available commands.".to_owned(),
         ));
@@ -69,26 +69,33 @@ pub async fn handle(
                 .replace("&lt;", "<")
                 .replace("&gt;", ">")
                 .replace("<br/>", "\n");
-            Ok(Body::Html(plain_help_message, html_help_message.to_owned()))
+            Ok(RoomMessageEventContent::notice_html(
+                plain_help_message,
+                html_help_message.to_owned(),
+            ))
         }
         "version" => {
             let version = env!("CARGO_PKG_VERSION");
-            Ok(Body::Html(
+            Ok(RoomMessageEventContent::notice_html(
                 version.to_owned(),
                 format!(
                     "<a href=\"https://factoria.origincode.me/OriginCode/anicca-subscribe-matrix/-/tree/v{version}?ref_type=tags\">{version}</a>"
                 ),
             ))
         }
-        "changelog" => Ok(Body::Markdown(include_str!("../CHANGELOG.md").to_owned())),
-        "ping" => Ok(Body::Plain("pong".to_string())),
+        "changelog" => Ok(RoomMessageEventContent::notice_markdown(
+            include_str!("../CHANGELOG.md").to_owned(),
+        )),
+        "ping" => Ok(RoomMessageEventContent::notice_plain("pong".to_string())),
         "list" => {
             let packages = get_packages(user_id, pool).await?;
             if packages.is_empty() {
-                Ok(Body::Plain("No package subscribed.".to_owned()))
+                Ok(RoomMessageEventContent::notice_plain(
+                    "No package subscribed.".to_owned(),
+                ))
             } else {
                 let package_list = packages.join(", ");
-                Ok(Body::Plain(format!(
+                Ok(RoomMessageEventContent::notice_plain(format!(
                     "Subscribed {} package{}: {}",
                     packages.len(),
                     if packages.len() >= 2 { "s" } else { "" },
@@ -98,7 +105,7 @@ pub async fn handle(
         }
         "subscribe" => {
             if args.len() < 2 {
-                return Ok(Body::Html(
+                return Ok(RoomMessageEventContent::notice_html(
                     "Usage: `!anic subscribe <packages>`".to_owned(),
                     "Usage: <code>!anic subscribe &lt;packages&gt;</code>".to_owned(),
                 ));
@@ -117,11 +124,13 @@ pub async fn handle(
                 })
                 .await
                 .unwrap()?;
-            Ok(Body::Plain("Subscribed.".to_owned()))
+            Ok(RoomMessageEventContent::notice_plain(
+                "Subscribed.".to_owned(),
+            ))
         }
         "unsubscribe" => {
             if args.len() < 2 {
-                return Ok(Body::Html(
+                return Ok(RoomMessageEventContent::notice_html(
                     "Usage: `!anic unsubscribe <packages>`".to_owned(),
                     "Usage: <code>!anic unsubscribe &lt;packages&gt;</code>".to_owned(),
                 ));
@@ -140,7 +149,9 @@ pub async fn handle(
                 })
                 .await
                 .unwrap()?;
-            Ok(Body::Plain("Unsubscribed.".to_owned()))
+            Ok(RoomMessageEventContent::notice_plain(
+                "Unsubscribed.".to_owned(),
+            ))
         }
         "updates" => {
             let packages = get_packages(user_id, pool).await?;
@@ -148,10 +159,15 @@ pub async fn handle(
                 .await?
                 .get_subscription_updates(&packages)?;
             if updates.is_empty() {
-                Ok(Body::Plain("No package update found.".to_owned()))
+                Ok(RoomMessageEventContent::notice_plain(
+                    "No package update found.".to_owned(),
+                ))
             } else {
                 let (plain_updates, html_updates) = format_update_packages(&mut updates);
-                Ok(Body::Html(plain_updates, html_updates))
+                Ok(RoomMessageEventContent::notice_html(
+                    plain_updates,
+                    html_updates,
+                ))
             }
         }
         "enable-notification" => {
@@ -166,7 +182,7 @@ pub async fn handle(
                 .await
                 .unwrap()?;
             if count > 0 {
-                return Ok(Body::Plain(
+                return Ok(RoomMessageEventContent::notice_plain(
                     "Hourly notification already enabled.".to_owned(),
                 ));
             }
@@ -180,7 +196,9 @@ pub async fn handle(
                 })
                 .await
                 .unwrap()?;
-            Ok(Body::Plain("Enabled hourly notification.".to_owned()))
+            Ok(RoomMessageEventContent::notice_plain(
+                "Enabled hourly notification.".to_owned(),
+            ))
         }
         "disable-notification" => {
             let db_conn = pool.get().await?;
@@ -194,8 +212,13 @@ pub async fn handle(
                 })
                 .await
                 .unwrap()?;
-            Ok(Body::Plain("Hourly notification disabled.".to_owned()))
+            Ok(RoomMessageEventContent::notice_plain(
+                "Hourly notification disabled.".to_owned(),
+            ))
         }
-        _ => Ok(Body::Plain(format!("Unknown command: {}", args[0]))),
+        _ => Ok(RoomMessageEventContent::notice_plain(format!(
+            "Unknown command: {}",
+            args[0]
+        ))),
     }
 }

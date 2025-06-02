@@ -9,23 +9,6 @@ use tracing::info;
 
 use anicca_subscribe::anicca::{Anicca, Package};
 
-pub enum Body {
-    Plain(String),
-    /// First: plain text, second: html text
-    Html(String, String),
-    Markdown(String),
-}
-
-impl Body {
-    pub fn to_message_event_content(&self) -> RoomMessageEventContent {
-        match self {
-            Body::Plain(text) => RoomMessageEventContent::text_plain(text),
-            Body::Html(plain, html) => RoomMessageEventContent::notice_html(plain, html),
-            Body::Markdown(markdown) => RoomMessageEventContent::text_markdown(markdown),
-        }
-    }
-}
-
 pub fn format_update_packages(packages: &mut [Package]) -> (String, String) {
     packages.sort_by(|a, b| a.name.cmp(&b.name));
     let packages_list = packages
@@ -43,8 +26,7 @@ pub fn format_update_packages(packages: &mut [Package]) -> (String, String) {
                 }
             )
         })
-        .collect::<Vec<String>>()
-        .join("<br/>");
+        .collect::<String>();
     let html_output = format!(
         "<strong>Found {} update{}</strong><br/><ul>{}</ul>",
         packages.len(),
@@ -58,7 +40,7 @@ pub fn format_update_packages(packages: &mut [Package]) -> (String, String) {
         .replace("<ul>", "")
         .replace("</ul>", "")
         .replace("<li>", "- ")
-        .replace("</li>", "")
+        .replace("</li>", "\n")
         .replace("<strong>", "")
         .replace("</strong>", ": ");
     (plain_output, html_output)
@@ -102,7 +84,7 @@ async fn notify_user(client: Client, user_id: &UserId, pool: Pool, data_dir: &Pa
         let header = "(Hourly Notification)";
         let plain_updates = format!("{header}\n{plain_updates}");
         let html_updates = format!("{header}<br/>{html_updates}");
-        let content = Body::Html(plain_updates, html_updates).to_message_event_content();
+        let content = RoomMessageEventContent::notice_html(plain_updates, html_updates);
         room.send(content).await?;
     }
 

@@ -202,7 +202,7 @@ async fn on_message(
         .await?
         .unwrap_or("anicca".to_owned());
     let parsed_args = parse_prefix_and_args(is_direct, &text.body, client.user_id(), &display_name);
-    let res = if let Some(args) = parsed_args {
+    let mut reply = if let Some(args) = parsed_args {
         set_read_marker(room.clone(), event.event_id.clone());
         command::handle(
             &args,
@@ -216,7 +216,6 @@ async fn on_message(
         return Ok(());
     };
 
-    let mut reply = res.to_message_event_content();
     // We should use make_reply_to, but it embeds the original message body, which I don't want
     reply.relates_to = match reply.relates_to {
         Some(Relation::Replacement(_)) => unreachable!(),
