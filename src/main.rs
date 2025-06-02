@@ -15,9 +15,7 @@ use matrix_sdk::{
             room::{
                 encrypted::SyncRoomEncryptedEvent,
                 member::{MembershipState, StrippedRoomMemberEvent, SyncRoomMemberEvent},
-                message::{
-                    MessageType, OriginalSyncRoomMessageEvent, Relation, RoomMessageEventContent,
-                },
+                message::{MessageType, OriginalSyncRoomMessageEvent, Relation},
             },
         },
     },
@@ -218,10 +216,7 @@ async fn on_message(
         return Ok(());
     };
 
-    let mut reply = match res {
-        (body, Some(html_body)) => RoomMessageEventContent::notice_html(body, html_body),
-        (body, None) => RoomMessageEventContent::notice_plain(body),
-    };
+    let mut reply = res.to_message_event_content();
     // We should use make_reply_to, but it embeds the original message body, which I don't want
     reply.relates_to = match reply.relates_to {
         Some(Relation::Replacement(_)) => unreachable!(),

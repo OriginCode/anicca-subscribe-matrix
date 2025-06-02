@@ -2,10 +2,9 @@ use anicca_subscribe::anicca::Anicca;
 use deadpool_sqlite::Pool;
 use eyre::Result;
 use matrix_sdk::ruma::UserId;
-use pulldown_cmark::{Options, Parser};
 use std::path::Path;
 
-use crate::bot::{format_update_packages, get_packages};
+use crate::bot::{Body, format_update_packages, get_packages};
 
 pub const COMMAND_PREFIX: &str = "!anic";
 
@@ -43,14 +42,11 @@ pub async fn handle(
     data_dir: &Path,
     user_id: &UserId,
     pool: Pool,
-) -> Result<(String, Option<String>)> {
+) -> Result<Body> {
     if args.is_empty() {
-        return Ok((
+        return Ok(Body::Html(
             "No command provided. Type `!anic help` for available commands.".to_owned(),
-            Some(
-                "No command provided. Type <code>!anic help</code> for available commands."
-                    .to_owned(),
-            ),
+            "No command provided. Type <code>!anic help</code> for available commands.".to_owned(),
         ));
     }
 
@@ -73,50 +69,38 @@ pub async fn handle(
                 .replace("&lt;", "<")
                 .replace("&gt;", ">")
                 .replace("<br/>", "\n");
-            Ok((plain_help_message, Some(html_help_message.to_owned())))
+            Ok(Body::Html(plain_help_message, html_help_message.to_owned()))
         }
         "version" => {
             let version = env!("CARGO_PKG_VERSION");
-            Ok((
+            Ok(Body::Html(
                 version.to_owned(),
-                Some(format!(
+                format!(
                     "<a href=\"https://factoria.origincode.me/OriginCode/anicca-subscribe-matrix/-/tree/v{version}?ref_type=tags\">{version}</a>"
-                )),
+                ),
             ))
         }
-        "changelog" => {
-            let changelog = include_str!("../CHANGELOG.md");
-            let mut options = Options::empty();
-            options.insert(Options::ENABLE_TABLES);
-            options.insert(Options::ENABLE_STRIKETHROUGH);
-            let parser = Parser::new_ext(changelog, options);
-            let mut html_changelog = String::new();
-            pulldown_cmark::html::push_html(&mut html_changelog, parser);
-            Ok((changelog.to_owned(), Some(html_changelog)))
-        }
-        "ping" => Ok(("pong".to_string(), None)),
+        "changelog" => Ok(Body::Markdown(include_str!("../CHANGELOG.md").to_owned())),
+        "ping" => Ok(Body::Plain("pong".to_string())),
         "list" => {
             let packages = get_packages(user_id, pool).await?;
             if packages.is_empty() {
-                Ok(("No package subscribed.".to_owned(), None))
+                Ok(Body::Plain("No package subscribed.".to_owned()))
             } else {
                 let package_list = packages.join(", ");
-                Ok((
-                    format!(
-                        "Subscribed {} package{}: {}",
-                        packages.len(),
-                        if packages.len() >= 2 { "s" } else { "" },
-                        package_list
-                    ),
-                    None,
-                ))
+                Ok(Body::Plain(format!(
+                    "Subscribed {} package{}: {}",
+                    packages.len(),
+                    if packages.len() >= 2 { "s" } else { "" },
+                    package_list
+                )))
             }
         }
         "subscribe" => {
             if args.len() < 2 {
-                return Ok((
+                return Ok(Body::Html(
                     "Usage: `!anic subscribe <packages>`".to_owned(),
-                    Some("Usage: <code>!anic subscribe &lt;packages&gt;</code>".to_owned()),
+                    "Usage: <code>!anic subscribe &lt;packages&gt;</code>".to_owned(),
                 ));
             }
             let packages: Vec<String> = args[1..].to_vec();
@@ -133,13 +117,13 @@ pub async fn handle(
                 })
                 .await
                 .unwrap()?;
-            Ok(("Subscribed.".to_owned(), None))
+            Ok(Body::Plain("Subscribed.".to_owned()))
         }
         "unsubscribe" => {
             if args.len() < 2 {
-                return Ok((
+                return Ok(Body::Html(
                     "Usage: `!anic unsubscribe <packages>`".to_owned(),
-                    Some("Usage: <code>!anic unsubscribe &lt;packages&gt;</code>".to_owned()),
+                    "Usage: <code>!anic unsubscribe &lt;packages&gt;</code>".to_owned(),
                 ));
             }
             let packages: Vec<String> = args[1..].to_vec();
@@ -156,7 +140,7 @@ pub async fn handle(
                 })
                 .await
                 .unwrap()?;
-            Ok(("Unsubscribed.".to_owned(), None))
+            Ok(Body::Plain("Unsubscribed.".to_owned()))
         }
         "updates" => {
             let packages = get_packages(user_id, pool).await?;
@@ -164,10 +148,10 @@ pub async fn handle(
                 .await?
                 .get_subscription_updates(&packages)?;
             if updates.is_empty() {
-                Ok(("No package update found.".to_owned(), None))
+                Ok(Body::Plain("No package update found.".to_owned()))
             } else {
                 let (plain_updates, html_updates) = format_update_packages(&mut updates);
-                Ok((plain_updates, Some(html_updates)))
+                Ok(Body::Html(plain_updates, html_updates))
             }
         }
         "enable-notification" => {
@@ -182,7 +166,9 @@ pub async fn handle(
                 .await
                 .unwrap()?;
             if count > 0 {
-                return Ok(("Hourly notification already enabled.".to_owned(), None));
+                return Ok(Body::Plain(
+                    "Hourly notification already enabled.".to_owned(),
+                ));
             }
             let user_id_str = user_id.to_string();
             db_conn
@@ -194,7 +180,7 @@ pub async fn handle(
                 })
                 .await
                 .unwrap()?;
-            Ok(("Enabled hourly notification.".to_owned(), None))
+            Ok(Body::Plain("Enabled hourly notification.".to_owned()))
         }
         "disable-notification" => {
             let db_conn = pool.get().await?;
@@ -208,8 +194,8 @@ pub async fn handle(
                 })
                 .await
                 .unwrap()?;
-            Ok(("Hourly notification disabled.".to_owned(), None))
+            Ok(Body::Plain("Hourly notification disabled.".to_owned()))
         }
-        _ => Ok((format!("Unknown command: {}", args[0]), None)),
+        _ => Ok(Body::Plain(format!("Unknown command: {}", args[0]))),
     }
 }
