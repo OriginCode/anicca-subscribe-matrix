@@ -32,7 +32,7 @@ pub fn format_update_packages(packages: &mut [Package]) -> (String, String) {
         .iter()
         .map(|package| {
             format!(
-                "<code>{}: {} -> {}</code>{}",
+                "<li><code>{}: {} -> {}</code>{}</li>",
                 package.name,
                 package.before,
                 package.after,
@@ -46,7 +46,7 @@ pub fn format_update_packages(packages: &mut [Package]) -> (String, String) {
         .collect::<Vec<String>>()
         .join("<br/>");
     let html_output = format!(
-        "Found {} update{}:<br/>{}",
+        "<strong>Found {} update{}</strong><br/><ul>{}</ul>",
         packages.len(),
         if packages.len() >= 2 { "s" } else { "" },
         packages_list
@@ -54,7 +54,13 @@ pub fn format_update_packages(packages: &mut [Package]) -> (String, String) {
     let plain_output = html_output
         .replace("<code>", "")
         .replace("</code>", "")
-        .replace("<br/>", "\n");
+        .replace("<br/>", "\n")
+        .replace("<ul>", "")
+        .replace("</ul>", "")
+        .replace("<li>", "- ")
+        .replace("</li>", "")
+        .replace("<strong>", "")
+        .replace("</strong>", ": ");
     (plain_output, html_output)
 }
 
