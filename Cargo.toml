@@ -10,6 +10,7 @@ deadpool-sqlite = { version = "0.10.0", features = ["rt_tokio_1", "tracing"] }
 eyre = "0.6.12"
 matrix-sdk = { version = "0.11.0", features = ["eyre"] }
 matrixbot-ezlogin = "0.2.6"
+pulldown-cmark = "0.13.0"
 reqwest = "0.12.15"
 # Use the same version with the one depended by matrix-sdk
 rusqlite = "*"

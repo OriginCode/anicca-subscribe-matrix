@@ -2,6 +2,7 @@ use anicca_subscribe::anicca::Anicca;
 use deadpool_sqlite::Pool;
 use eyre::Result;
 use matrix_sdk::ruma::UserId;
+use pulldown_cmark::{Options, Parser};
 use std::path::Path;
 
 use crate::bot::{format_update_packages, get_packages};
@@ -62,9 +63,10 @@ pub async fn handle(
                                 <code>!anic subscribe &lt;packages&gt;</code> - Subscribe to packages<br/>\
                                 <code>!anic unsubscribe &lt;packages&gt;</code> - Unsubscribe from packages<br/>\
                                 <code>!anic updates</code> - Show package updates<br/>\
-                                <code>!anic version</code> - Show the application version
-                                <code>!anic enable-notification</code> - Enable hourly notification
-                                <code>!anic disable-notification</code> - Disable hourly notification";
+                                <code>!anic enable-notification</code> - Enable hourly notification<br/>\
+                                <code>!anic disable-notification</code> - Disable hourly notification<br/>\
+                                <code>!anic version</code> - Show the bot version<br/>\
+                                <code>!anic changelog</code> - Show the bot changelog"
             let plain_help_message = html_help_message
                 .replace("<code>", "`")
                 .replace("</code>", "`")
@@ -75,7 +77,22 @@ pub async fn handle(
         }
         "version" => {
             let version = env!("CARGO_PKG_VERSION");
-            Ok((version.to_owned(), None))
+            Ok((
+                version.to_owned(),
+                Some(format!(
+                    "<a href=\"https://factoria.origincode.me/OriginCode/anicca-subscribe-matrix/-/tree/v{version}?ref_type=tags\">{version}</a>"
+                )),
+            ))
+        }
+        "changelog" => {
+            let changelog = include_str!("../CHANGELOG.md");
+            let mut options = Options::empty();
+            options.insert(Options::ENABLE_TABLES);
+            options.insert(Options::ENABLE_STRIKETHROUGH);
+            let parser = Parser::new_ext(changelog, options);
+            let mut html_changelog = String::new();
+            pulldown_cmark::html::push_html(&mut html_changelog, parser);
+            Ok((changelog.to_owned(), Some(html_changelog)))
         }
         "ping" => Ok(("pong".to_string(), None)),
         "list" => {

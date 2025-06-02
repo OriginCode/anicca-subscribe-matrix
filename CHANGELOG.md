@@ -1,0 +1,32 @@
+## 0.2.2 - 2025-06-02
+### Chore
+- Release anicca-subscribe version 0.2.2
+
+### Fix
+- Fix database oprs
+
+## 0.2.1 - 2025-06-02
+### Chore
+- Release anicca-subscribe version 0.2.1
+
+### Refactor
+- Use get_dm_room instead of memorizing dm room ids
+
+## 0.2.0 - 2025-06-02
+### Chore
+- Set default log level to warn
+- Bump to 0.2.0
+
+### Feat
+- Init
+- Only read when the command is called
+- Support mention
+- Support dm with no prefixing
+- Hourly notification
+
+### Fix
+- Match exact prefix
+
+### Refactor
+- Share db connection
+
