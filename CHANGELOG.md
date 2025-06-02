@@ -1,3 +1,16 @@
+## 0.2.3 - 2025-06-02
+### Chore
+- Update deps
+
+### Feat
+- Add changelog
+- Produce html output
+- Add notification header
+- Improve formatting
+
+### Refactor
+- Use Body enum to manage reply types
+
 ## 0.2.2 - 2025-06-02
 ### Chore
 - Release anicca-subscribe version 0.2.2
