@@ -1,6 +1,11 @@
+## 0.2.4 - 2025-06-02
+### Refactor
+- Just use RoomMessageEventContent, what was I doing
+
 ## 0.2.3 - 2025-06-02
 ### Chore
 - Update deps
+- Release anicca-subscribe version 0.2.3
 
 ### Feat
 - Add changelog
