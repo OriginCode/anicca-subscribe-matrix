@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
                 (),
             )?;
             conn.execute(
-                "CREATE TABLE IF NOT EXISTS notification ( user_id TEXT PRIMARY KEY, dm_room_id TEXT )",
+                "CREATE TABLE IF NOT EXISTS notification ( user_id TEXT )",
                 (),
             )?;
             drop(matrixbot_ezlogin::setup_interactive(&data_dir, &device_name).await?)
