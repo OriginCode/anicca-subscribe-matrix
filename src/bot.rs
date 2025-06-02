@@ -2,9 +2,7 @@ use deadpool_sqlite::Pool;
 use eyre::Result;
 use matrix_sdk::{
     Client, Room,
-    ruma::{
-        OwnedUserId, UserId, events::room::message::RoomMessageEventContent,
-    },
+    ruma::{OwnedUserId, UserId, events::room::message::RoomMessageEventContent},
 };
 use std::path::Path;
 use tracing::info;
@@ -57,37 +55,15 @@ pub async fn get_packages(user_id: &UserId, pool: Pool) -> Result<Vec<String>> {
     Ok(packages)
 }
 
-async fn dm_or_create(
-    client: Client,
-    user_id: &UserId,
-    pool: Pool,
-) -> Result<Room> {
-        if let Some(room) = client.get_dm_room(user_id) {
-            return Ok(room);
-        }
-    let room = client.create_dm(user_id).await?;
-    let db_conn = pool.get().await?;
-    let user_id_str = user_id.to_string();
-    let room_id_str = room.room_id().to_string();
-    db_conn
-        .interact(move |db_conn| {
-            db_conn.execute(
-                "UPDATE notification SET dm_room_id = ?1 WHERE user_id = ?2",
-                [&room_id_str, &user_id_str],
-            )
-        })
-        .await
-        .unwrap()?;
-    Ok(room)
+async fn dm_or_create(client: Client, user_id: &UserId) -> Result<Room> {
+    if let Some(room) = client.get_dm_room(user_id) {
+        return Ok(room);
+    }
+    Ok(client.create_dm(user_id).await?)
 }
 
-async fn notify_user(
-    client: Client,
-    user_id: &UserId,
-    pool: Pool,
-    data_dir: &Path,
-) -> Result<()> {
-    let room = dm_or_create(client.clone(), user_id, pool.clone()).await?;
+async fn notify_user(client: Client, user_id: &UserId, pool: Pool, data_dir: &Path) -> Result<()> {
+    let room = dm_or_create(client.clone(), user_id).await?;
     info!("Notifying user: {}", user_id);
     let anicca_diff = Anicca::get_diff(data_dir).await?;
     let packages = get_packages(user_id, pool.clone()).await?;
@@ -110,7 +86,7 @@ pub async fn notify(client: Client, pool: Pool, data_dir: &Path) -> Result<()> {
 
             let mut targets = Vec::new();
             while let Some(row) = rows.next()? {
-                let user_id= UserId::parse(row.get::<_, String>(0)?).unwrap();
+                let user_id = UserId::parse(row.get::<_, String>(0)?).unwrap();
                 targets.push(user_id);
             }
             Ok::<Vec<OwnedUserId>, rusqlite::Error>(targets)
@@ -119,13 +95,7 @@ pub async fn notify(client: Client, pool: Pool, data_dir: &Path) -> Result<()> {
         .unwrap()?;
 
     for user_id in targets.iter() {
-        notify_user(
-            client.clone(),
-            user_id,
-            pool.clone(),
-            data_dir,
-        )
-        .await?;
+        notify_user(client.clone(), user_id, pool.clone(), data_dir).await?;
     }
 
     Ok(())

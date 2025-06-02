@@ -197,7 +197,6 @@ async fn on_message(
         unreachable!()
     };
 
-    let room_id = room.room_id();
     let is_direct = room.is_direct().await?;
     let display_name = client
         .account()
@@ -210,8 +209,6 @@ async fn on_message(
         command::handle(
             &args,
             &context.data_dir,
-            room_id,
-            is_direct,
             &event.sender,
             context.pool.clone(),
         )

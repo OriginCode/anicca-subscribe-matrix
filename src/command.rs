@@ -1,7 +1,7 @@
 use anicca_subscribe::anicca::Anicca;
 use deadpool_sqlite::Pool;
 use eyre::Result;
-use matrix_sdk::{ruma::RoomId, ruma::UserId};
+use matrix_sdk::ruma::UserId;
 use std::path::Path;
 
 use crate::bot::{format_update_packages, get_packages};
@@ -40,8 +40,6 @@ pub fn parse_args(text: &str) -> Vec<String> {
 pub async fn handle(
     args: &[String],
     data_dir: &Path,
-    room_id: &RoomId,
-    is_direct: bool,
     user_id: &UserId,
     pool: Pool,
 ) -> Result<(String, Option<String>)> {
@@ -168,30 +166,16 @@ pub async fn handle(
             if count > 0 {
                 return Ok(("Hourly notification already enabled.".to_owned(), None));
             }
-            if is_direct {
-                let user_id_str = user_id.to_string();
-                let room_id_str = room_id.to_string();
-                db_conn
-                    .interact(move |db_conn| {
-                        db_conn.execute(
-                            "INSERT INTO notification (user_id, dm_room_id) VALUES (?1, ?2)",
-                            [&user_id_str, &room_id_str],
-                        )
-                    })
-                    .await
-                    .unwrap()?;
-            } else {
-                let user_id_str = user_id.to_string();
-                db_conn
-                    .interact(move |db_conn| {
-                        db_conn.execute(
-                            "INSERT INTO notification (user_id, dm_room_id) VALUES (?1, NULL)",
-                            [&user_id_str],
-                        )
-                    })
-                    .await
-                    .unwrap()?;
-            }
+            let user_id_str = user_id.to_string();
+            db_conn
+                .interact(move |db_conn| {
+                    db_conn.execute(
+                        "INSERT INTO notification (user_id) VALUES (?1)",
+                        [&user_id_str],
+                    )
+                })
+                .await
+                .unwrap()?;
             Ok(("Enabled hourly notification.".to_owned(), None))
         }
         "disable-notification" => {
