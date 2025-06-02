@@ -1,0 +1,148 @@
+use deadpool_sqlite::Pool;
+use eyre::Result;
+use matrix_sdk::{
+    Client, Room,
+    ruma::{
+        OwnedRoomId, OwnedUserId, RoomId, UserId, events::room::message::RoomMessageEventContent,
+    },
+};
+use std::path::Path;
+use tracing::info;
+
+use anicca_subscribe::anicca::{Anicca, Package};
+
+pub fn format_update_packages(packages: &mut [Package]) -> String {
+    packages.sort_by(|a, b| a.name.cmp(&b.name));
+    let packages_list = packages
+        .iter()
+        .map(|package| {
+            format!(
+                "{}: {} -> {}{}",
+                package.name,
+                package.before,
+                package.after,
+                if package.warnings.len() > 1 {
+                    format!(" ({})", &package.warnings[1])
+                } else {
+                    String::new()
+                }
+            )
+        })
+        .collect::<Vec<String>>()
+        .join("\n");
+    format!(
+        "Found {} update{}:\n{}",
+        packages.len(),
+        if packages.len() >= 2 { "s" } else { "" },
+        packages_list
+    )
+}
+
+pub async fn get_packages(user_id: &UserId, pool: Pool) -> Result<Vec<String>> {
+    let db_conn = pool.get().await?;
+    let user_id_str = user_id.to_string();
+    let packages = db_conn
+        .interact(move |db_conn| {
+            let mut stmt =
+                db_conn.prepare("SELECT package FROM subscription WHERE user_id = ?1")?;
+            let rows = stmt.query_map([&user_id_str], |row| row.get(0))?;
+            let mut packages: Vec<String> = Vec::new();
+            for row in rows {
+                packages.push(row?);
+            }
+            Ok::<Vec<String>, rusqlite::Error>(packages)
+        })
+        .await
+        .unwrap()?;
+    Ok(packages)
+}
+
+async fn dm_or_create(
+    client: Client,
+    user_id: &UserId,
+    room_id: Option<&RoomId>,
+    pool: Pool,
+) -> Result<Room> {
+    if let Some(room_id) = room_id {
+        if let Some(room) = client.get_room(room_id) {
+            return Ok(room);
+        }
+    }
+    let room = client.create_dm(user_id).await?;
+    let db_conn = pool.get().await?;
+    let user_id_str = user_id.to_string();
+    let room_id_str = room.room_id().to_string();
+    db_conn
+        .interact(move |db_conn| {
+            db_conn.execute(
+                "UPDATE notification SET dm_room_id = ?1 WHERE user_id = ?2",
+                [&room_id_str, &user_id_str],
+            )
+        })
+        .await
+        .unwrap()?;
+    Ok(room)
+}
+
+async fn notify_user(
+    client: Client,
+    user_id: &UserId,
+    room_id: Option<&RoomId>,
+    pool: Pool,
+    data_dir: &Path,
+) -> Result<()> {
+    let room = dm_or_create(client.clone(), user_id, room_id, pool.clone()).await?;
+    info!("Notifying user: {}", user_id);
+    let anicca_diff = Anicca::get_diff(data_dir).await?;
+    let packages = get_packages(user_id, pool.clone()).await?;
+    let mut updates = anicca_diff.get_subscription_updates(&packages)?;
+
+    if !updates.is_empty() {
+        let content = RoomMessageEventContent::notice_plain(format_update_packages(&mut updates));
+        room.send(content).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn notify(client: Client, pool: Pool, data_dir: &Path) -> Result<()> {
+    let db_conn = pool.get().await?;
+    let targets = db_conn
+        .interact(|db_conn| {
+            let mut stmt = db_conn.prepare("SELECT user_id, dm_room_id FROM notification")?;
+            let rows = stmt.query_map([], |row| {
+                let user_id: String = row.get(0)?;
+                let room_id: String = row.get(1)?;
+                Ok((
+                    UserId::parse(&user_id).unwrap(),
+                    if room_id == "null" {
+                        None
+                    } else {
+                        Some(RoomId::parse(&room_id).unwrap())
+                    },
+                ))
+            })?;
+
+            let mut targets = Vec::new();
+            for row in rows {
+                let (user_id, room_id) = row?;
+                targets.push((user_id, room_id));
+            }
+            Ok::<Vec<(OwnedUserId, Option<OwnedRoomId>)>, rusqlite::Error>(targets)
+        })
+        .await
+        .unwrap()?;
+
+    for (user_id, room_id) in targets.iter() {
+        notify_user(
+            client.clone(),
+            user_id,
+            room_id.as_ref().map(|v| &**v),
+            pool.clone(),
+            data_dir,
+        )
+        .await?;
+    }
+
+    Ok(())
+}

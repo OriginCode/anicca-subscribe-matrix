@@ -1,4 +1,6 @@
 use clap::Parser;
+use command::parse_prefix_and_args;
+use deadpool_sqlite::{Config, Pool, Runtime};
 use eyre::Result;
 use matrix_sdk::{
     Client, Room, RoomState,
@@ -23,21 +25,20 @@ use matrix_sdk::{
 use rusqlite::Connection;
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
     time::Duration,
 };
-use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 use tracing_subscriber::{EnvFilter, prelude::*};
 
+mod bot;
 mod cli;
 mod command;
 
 use cli::{Cli, Subcommands};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Payload {
-    db: Arc<Mutex<Connection>>,
+    pool: Pool,
     data_dir: PathBuf,
 }
 
@@ -72,7 +73,11 @@ async fn main() -> Result<()> {
         } => {
             let conn = Connection::open(data_dir.join("anicca.db"))?;
             conn.execute(
-                "CREATE TABLE subscription ( user_id TEXT NOT NULL, package TEXT NOT NULL )",
+                "CREATE TABLE IF NOT EXISTS subscription ( user_id TEXT NOT NULL, package TEXT NOT NULL )",
+                (),
+            )?;
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS notification ( user_id TEXT PRIMARY KEY, dm_room_id TEXT )",
                 (),
             )?;
             drop(matrixbot_ezlogin::setup_interactive(&data_dir, &device_name).await?)
@@ -89,7 +94,9 @@ async fn run(data_dir: &Path) -> Result<()> {
     tokio::spawn(async move {
         loop {
             info!("Fetching anicca pkgsupdate.json");
-            let _ = anicca_subscribe::anicca::Anicca::fetch_json(&data_dir_copy).await;
+            if let Err(e) = anicca_subscribe::anicca::Anicca::fetch_json(&data_dir_copy).await {
+                warn!("Unable to fetch anicca pkgsupdate.json: {}", e);
+            }
             tokio::time::sleep(Duration::from_secs(3600)).await;
         }
     });
@@ -110,12 +117,28 @@ async fn run(data_dir: &Path) -> Result<()> {
         .sync_once(&client, sync_settings.clone())
         .await?;
 
+    let cfg = Config::new(data_dir.join("anicca.db"));
+    let pool = cfg.create_pool(Runtime::Tokio1)?;
+
     client.add_event_handler_context(Payload {
-        db: Arc::new(Mutex::new(Connection::open(data_dir.join("anicca.db"))?)),
+        pool: pool.clone(),
         data_dir: data_dir.to_owned(),
     });
     client.add_event_handler(on_message);
     client.add_event_handler(on_utd);
+
+    let notify_client = client.clone();
+    let data_dir_owned = data_dir.to_path_buf();
+    tokio::task::spawn(async move {
+        loop {
+            info!("Sending hourly notifications");
+            if let Err(e) = bot::notify(notify_client.clone(), pool.clone(), &data_dir_owned).await
+            {
+                warn!("Unable to send hourly notifications: {}", e);
+            }
+            tokio::time::sleep(Duration::from_secs(3600)).await;
+        }
+    });
 
     info!("Starting sync.");
     sync_helper.sync(&client, sync_settings).await?;
@@ -174,44 +197,23 @@ async fn on_message(
         unreachable!()
     };
 
-    let parsed_args = command::parse_args(&text.body);
-    let prefix = parsed_args.first().map(|x| x.as_str());
-    let display_name_prefix = client
+    let room_id = room.room_id();
+    let is_direct = room.is_direct().await?;
+    let display_name = client
         .account()
         .get_display_name()
         .await?
-        .unwrap_or("anicca".to_owned())
-        + ": ";
-    let res = if prefix == Some(command::COMMAND_PREFIX)
-        || prefix == client.user_id().map(|x| x.as_str())
-        || prefix == client.user_id().map(|x| format!("{}:", x)).as_deref()
-    {
+        .unwrap_or("anicca".to_owned());
+    let parsed_args = parse_prefix_and_args(is_direct, &text.body, client.user_id(), &display_name);
+    let res = if let Some(args) = parsed_args {
         set_read_marker(room.clone(), event.event_id.clone());
         command::handle(
-            &parsed_args[1..],
+            &args,
             &context.data_dir,
+            room_id,
+            is_direct,
             &event.sender,
-            context.db.clone(),
-        )
-        .await?
-    } else if text.body.starts_with(&display_name_prefix) {
-        set_read_marker(room.clone(), event.event_id.clone());
-        let parsed_args =
-            command::parse_args(text.body.strip_prefix(&display_name_prefix).unwrap());
-        command::handle(
-            &parsed_args,
-            &context.data_dir,
-            &event.sender,
-            context.db.clone(),
-        )
-        .await?
-    } else if room.is_direct().await? {
-        set_read_marker(room.clone(), event.event_id.clone());
-        command::handle(
-            &parsed_args,
-            &context.data_dir,
-            &event.sender,
-            context.db.clone(),
+            context.pool.clone(),
         )
         .await?
     } else {
