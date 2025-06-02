@@ -9,13 +9,13 @@ use tracing::info;
 
 use anicca_subscribe::anicca::{Anicca, Package};
 
-pub fn format_update_packages(packages: &mut [Package]) -> String {
+pub fn format_update_packages(packages: &mut [Package]) -> (String, String) {
     packages.sort_by(|a, b| a.name.cmp(&b.name));
     let packages_list = packages
         .iter()
         .map(|package| {
             format!(
-                "{}: {} -> {}{}",
+                "<code>{}: {} -> {}</code>{}",
                 package.name,
                 package.before,
                 package.after,
@@ -27,13 +27,18 @@ pub fn format_update_packages(packages: &mut [Package]) -> String {
             )
         })
         .collect::<Vec<String>>()
-        .join("\n");
-    format!(
-        "Found {} update{}:\n{}",
+        .join("<br/>");
+    let html_output = format!(
+        "Found {} update{}:<br/>{}",
         packages.len(),
         if packages.len() >= 2 { "s" } else { "" },
         packages_list
-    )
+    );
+    let plain_output = html_output
+        .replace("<code>", "")
+        .replace("</code>", "")
+        .replace("<br/>", "\n");
+    (plain_output, html_output)
 }
 
 pub async fn get_packages(user_id: &UserId, pool: Pool) -> Result<Vec<String>> {
@@ -70,7 +75,8 @@ async fn notify_user(client: Client, user_id: &UserId, pool: Pool, data_dir: &Pa
     let mut updates = anicca_diff.get_subscription_updates(&packages)?;
 
     if !updates.is_empty() {
-        let content = RoomMessageEventContent::notice_plain(format_update_packages(&mut updates));
+        let (plain_updates, html_updates) = format_update_packages(&mut updates);
+        let content = RoomMessageEventContent::notice_html(plain_updates, html_updates);
         room.send(content).await?;
     }
 

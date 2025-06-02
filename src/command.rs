@@ -66,7 +66,7 @@ pub async fn handle(
                                 <code>!anic enable-notification</code> - Enable hourly notification<br/>\
                                 <code>!anic disable-notification</code> - Disable hourly notification<br/>\
                                 <code>!anic version</code> - Show the bot version<br/>\
-                                <code>!anic changelog</code> - Show the bot changelog"
+                                <code>!anic changelog</code> - Show the bot changelog";
             let plain_help_message = html_help_message
                 .replace("<code>", "`")
                 .replace("</code>", "`")
@@ -166,7 +166,8 @@ pub async fn handle(
             if updates.is_empty() {
                 Ok(("No package update found.".to_owned(), None))
             } else {
-                Ok((format_update_packages(&mut updates), None))
+                let (plain_updates, html_updates) = format_update_packages(&mut updates);
+                Ok((plain_updates, Some(html_updates)))
             }
         }
         "enable-notification" => {
