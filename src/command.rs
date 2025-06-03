@@ -90,11 +90,10 @@ pub async fn handle(
             let changelog = include_str!("../CHANGELOG.md");
             Ok(RoomMessageEventContent::notice_html(
                 changelog.to_owned(),
-                FormattedBody::markdown(format!(
-                    "<details><summary>Click to see the changelog</summary>{changelog}</details>",
-                ))
-                .unwrap()
-                .body,
+                format!(
+                    "<details><summary>Click to see the changelog</summary>{}</details>",
+                    FormattedBody::markdown(changelog).unwrap().body
+                ),
             ))
         }
         "ping" => Ok(RoomMessageEventContent::notice_plain("pong".to_string())),
