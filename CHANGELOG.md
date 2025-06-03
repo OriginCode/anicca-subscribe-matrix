@@ -1,4 +1,11 @@
+## 0.2.6 - 2025-06-03
+### Fix
+- Parse markdown before inserting into html
+
 ## 0.2.5 - 2025-06-03
+### Chore
+- Release anicca-subscribe version 0.2.5
+
 ### Refactor
 - Use details to shorten the message
 
