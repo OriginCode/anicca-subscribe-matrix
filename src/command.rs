@@ -1,7 +1,10 @@
 use anicca_subscribe::anicca::Anicca;
 use deadpool_sqlite::Pool;
 use eyre::Result;
-use matrix_sdk::ruma::{UserId, events::room::message::RoomMessageEventContent};
+use matrix_sdk::ruma::{
+    UserId,
+    events::room::message::{FormattedBody, RoomMessageEventContent},
+};
 use std::path::Path;
 
 use crate::bot::{format_update_packages, get_packages};
@@ -83,9 +86,17 @@ pub async fn handle(
                 ),
             ))
         }
-        "changelog" => Ok(RoomMessageEventContent::notice_markdown(
-            include_str!("../CHANGELOG.md").to_owned(),
-        )),
+        "changelog" => {
+            let changelog = include_str!("../CHANGELOG.md");
+            Ok(RoomMessageEventContent::notice_html(
+                changelog.to_owned(),
+                FormattedBody::markdown(format!(
+                    "<details><summary>Click to see the changelog</summary>{changelog}</details>",
+                ))
+                .unwrap()
+                .body,
+            ))
+        }
         "ping" => Ok(RoomMessageEventContent::notice_plain("pong".to_string())),
         "list" => {
             let packages = get_packages(user_id, pool).await?;
