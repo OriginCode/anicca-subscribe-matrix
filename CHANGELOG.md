@@ -1,4 +1,11 @@
+## 0.2.5 - 2025-06-03
+### Refactor
+- Use details to shorten the message
+
 ## 0.2.4 - 2025-06-02
+### Chore
+- Release anicca-subscribe version 0.2.4
+
 ### Refactor
 - Just use RoomMessageEventContent, what was I doing
 
