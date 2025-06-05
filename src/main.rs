@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::registry()
         .with(tracing_error::ErrorLayer::default())
         .with({
-            let mut filter = EnvFilter::new("warn,matrixbot_ezlogin=debug");
+            let mut filter = EnvFilter::new("info,matrixbot_ezlogin=info");
             if let Some(env) = std::env::var_os(EnvFilter::DEFAULT_ENV) {
                 for segment in env.to_string_lossy().split(',') {
                     if let Ok(directive) = segment.parse() {
@@ -88,18 +88,29 @@ async fn main() -> Result<()> {
 }
 
 async fn run(data_dir: &Path) -> Result<()> {
-    let data_dir_copy = data_dir.to_path_buf();
+    let (client, sync_helper) = matrixbot_ezlogin::login(data_dir).await?;
+
+    let cfg = Config::new(data_dir.join("anicca.db"));
+    let pool = cfg.create_pool(Runtime::Tokio1)?;
+
+    let notify_client = client.clone();
+    let data_dir_owned = data_dir.to_path_buf();
+    let notify_pool = pool.clone();
     tokio::spawn(async move {
         loop {
             info!("Fetching anicca pkgsupdate.json");
-            if let Err(e) = anicca_subscribe::anicca::Anicca::fetch_json(&data_dir_copy).await {
+            if let Err(e) = anicca_subscribe::anicca::Anicca::fetch_json(&data_dir_owned).await {
                 warn!("Unable to fetch anicca pkgsupdate.json: {}", e);
+            }
+            info!("Sending hourly notifications");
+            if let Err(e) =
+                bot::notify(notify_client.clone(), notify_pool.clone(), &data_dir_owned).await
+            {
+                warn!("Unable to send hourly notifications: {}", e);
             }
             tokio::time::sleep(Duration::from_secs(3600)).await;
         }
     });
-
-    let (client, sync_helper) = matrixbot_ezlogin::login(data_dir).await?;
 
     // We don't ignore joining and leaving events happened during downtime.
     client.add_event_handler(on_invite);
@@ -110,13 +121,12 @@ async fn run(data_dir: &Path) -> Result<()> {
     let sync_settings =
         SyncSettings::default().filter(FilterDefinition::with_lazy_loading().into());
 
-    info!("Skipping messages since last logout.");
+    info!(
+        "Skipping messages since last logout. May take longer depending on the number of rooms joined."
+    );
     sync_helper
         .sync_once(&client, sync_settings.clone())
         .await?;
-
-    let cfg = Config::new(data_dir.join("anicca.db"));
-    let pool = cfg.create_pool(Runtime::Tokio1)?;
 
     client.add_event_handler_context(Payload {
         pool: pool.clone(),
@@ -125,16 +135,15 @@ async fn run(data_dir: &Path) -> Result<()> {
     client.add_event_handler(on_message);
     client.add_event_handler(on_utd);
 
-    let notify_client = client.clone();
-    let data_dir_owned = data_dir.to_path_buf();
-    tokio::task::spawn(async move {
-        loop {
-            info!("Sending hourly notifications");
-            if let Err(e) = bot::notify(notify_client.clone(), pool.clone(), &data_dir_owned).await
-            {
-                warn!("Unable to send hourly notifications: {}", e);
+    // Forget rooms that we already left
+    let left_rooms = client.left_rooms();
+    tokio::spawn(async move {
+        for room in left_rooms {
+            info!("Forgetting room {}.", room.room_id());
+            match room.forget().await {
+                Ok(_) => info!("Forgot room {}.", room.room_id()),
+                Err(err) => error!("Failed to forget room {}: {:?}", room.room_id(), err),
             }
-            tokio::time::sleep(Duration::from_secs(3600)).await;
         }
     });
 
@@ -177,17 +186,28 @@ async fn on_message(
         // Ignore my own message
         return Ok(());
     }
-    info!("room = {}, event = {:?}", room.room_id(), event);
+    debug!("room = {}, event = {:?}", room.room_id(), event);
     if room.state() != RoomState::Joined {
-        info!("Ignoring: Current room state is {:?}.", room.state());
+        info!(
+            "Ignoring room {}: Current room state is {:?}.",
+            room.room_id(),
+            room.state()
+        );
         return Ok(());
     }
     if let Some(Relation::Replacement(_)) = event.content.relates_to {
-        info!("Ignoring: This event is an edit operation.");
+        info!(
+            "Ignoring event {}: This event is an edit operation.",
+            event.event_id
+        );
         return Ok(());
     }
     if !matches!(event.content.msgtype, MessageType::Text(_)) {
-        info!("Ignoring: Message type is {}.", event.content.msgtype());
+        info!(
+            "Ignoring event {}: Message type is {}.",
+            event.event_id,
+            event.content.msgtype()
+        );
         return Ok(());
     }
 
@@ -262,14 +282,21 @@ async fn on_invite(event: StrippedRoomMemberEvent, room: Room, client: Client) {
     if event.sender == user_id {
         return;
     }
-    info!("room = {}, event = {:?}", room.room_id(), event);
+    debug!("room = {}, event = {:?}", room.room_id(), event);
     // The user for which a membership applies is represented by the state_key.
     if event.state_key != user_id {
-        info!("Ignoring: Someone else was invited.");
+        info!(
+            "Ignoring room {}: Someone else was invited.",
+            room.room_id()
+        );
         return;
     }
     if room.state() != RoomState::Invited {
-        info!("Ignoring: Current room state is {:?}.", room.state());
+        info!(
+            "Ignoring room {}: Current room state is {:?}.",
+            room.room_id(),
+            room.state()
+        );
         return;
     }
 
@@ -316,7 +343,7 @@ async fn on_leave(event: SyncRoomMemberEvent, room: Room) {
     ) {
         return;
     }
-    info!("room = {}, event = {:?}", room.room_id(), event);
+    debug!("room = {}, event = {:?}", room.room_id(), event);
 
     match room.state() {
         RoomState::Joined => {

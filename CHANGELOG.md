@@ -1,4 +1,7 @@
 ## 0.2.6 - 2025-06-03
+### Chore
+- Release anicca-subscribe version 0.2.6
+
 ### Fix
 - Parse markdown before inserting into html
 
@@ -21,7 +24,7 @@
 - Update deps
 - Release anicca-subscribe version 0.2.3
 
-### Feat
+### Features
 - Add changelog
 - Produce html output
 - Add notification header
@@ -49,7 +52,7 @@
 - Set default log level to warn
 - Bump to 0.2.0
 
-### Feat
+### Features
 - Init
 - Only read when the command is called
 - Support mention
