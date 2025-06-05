@@ -1,3 +1,7 @@
+## 0.2.7 - 2025-06-05
+### Refactor
+- Merge hourly events
+
 ## 0.2.6 - 2025-06-03
 ### Chore
 - Release anicca-subscribe version 0.2.6
