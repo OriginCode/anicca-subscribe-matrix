@@ -2105,9 +2105,9 @@ dependencies = [
 
 [[package]]
 name = "matrixbot-ezlogin"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b06b420c2c67cbff3476be2e05f9a0de253e92f6e7e536175d0d2a6f6170393"
+checksum = "a43c50d13507da95556aa366ebbc1b905a7fef6f94dd0170e3fda28702de0c3e"
 dependencies = [
  "async-stream",
  "eyre",
