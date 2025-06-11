@@ -2,9 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.0 - 2025-06-11
+### Chore
+- Update deps
+- Update deps
+
+### Features
+- Add rocksdb backend
+- Add a tool for migrating database backends
+
+### Refactor
+- Abstract database access
+- Use transaction to avoid race condition
+
 ## 0.2.8 - 2025-06-11
 ### Chore
 - Update deps, CVE-2025-48937
+- Release anicca-subscribe version 0.2.8
 
 ## 0.2.7 - 2025-06-05
 ### Chore
