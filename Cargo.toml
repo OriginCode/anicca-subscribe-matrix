@@ -6,13 +6,13 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5.38", features = ["derive"] }
 color-eyre = "0.6.4"
-deadpool-sqlite = { version = "0.10.0", features = ["rt_tokio_1", "tracing"] }
+deadpool-sqlite = { version = "0.10.0", features = ["rt_tokio_1", "tracing"], optional = true }
 eyre = "0.6.12"
 matrix-sdk = { version = "0.12.0", default-features = false, features = ["eyre", "markdown", "e2e-encryption", "automatic-room-key-forwarding", "sqlite"] }
 matrixbot-ezlogin = { version = "0.3", default-features = false }
 reqwest = { version = "0.12.15", default-features = false, features = ["http2", "system-proxy"] }
 # Use the same version with the one depended by matrix-sdk
-rusqlite = "*"
+rusqlite = { version = "*", optional = true }
 serde = "1.0"
 serde_json = "1.0"
 tokio = { version = "1.45.1", features = ["rt", "macros", "rt-multi-thread"] }
@@ -21,8 +21,9 @@ tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 [features]
-default = ["native-tls"]
-static = ["rustls-tls", "bundled-sqlite"]
+default = ["native-tls", "sqlite"]
+sqlite = ["dep:rusqlite", "dep:deadpool-sqlite"]
+static-sqlite = ["rustls-tls", "sqlite", "bundled-sqlite"]
 native-tls = ["reqwest/native-tls", "matrix-sdk/native-tls", "matrixbot-ezlogin/native-tls"]
 rustls-tls = ["reqwest/rustls-tls", "matrix-sdk/rustls-tls", "matrixbot-ezlogin/rustls-tls"]
 bundled-sqlite = ["rusqlite/bundled", "matrix-sdk/bundled-sqlite", "matrixbot-ezlogin/bundled-sqlite"]

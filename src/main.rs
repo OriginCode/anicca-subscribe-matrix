@@ -1,6 +1,5 @@
 use clap::Parser;
 use command::parse_prefix_and_args;
-use deadpool_sqlite::{Config, Pool, Runtime};
 use eyre::Result;
 use matrix_sdk::{
     Client, Room, RoomState,
@@ -20,7 +19,6 @@ use matrix_sdk::{
         },
     },
 };
-use rusqlite::Connection;
 use std::{
     path::{Path, PathBuf},
     time::Duration,
@@ -31,12 +29,14 @@ use tracing_subscriber::{EnvFilter, prelude::*};
 mod bot;
 mod cli;
 mod command;
+mod db;
 
 use cli::{Cli, Subcommands};
+use db::*;
 
 #[derive(Clone, Debug)]
 struct Payload {
-    pool: Pool,
+    db: DatabaseImpl,
     data_dir: PathBuf,
 }
 
@@ -69,15 +69,7 @@ async fn main() -> Result<()> {
             data_dir,
             device_name,
         } => {
-            let conn = Connection::open(data_dir.join("anicca.db"))?;
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS subscription ( user_id TEXT NOT NULL, package TEXT NOT NULL )",
-                (),
-            )?;
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS notification ( user_id TEXT )",
-                (),
-            )?;
+            db::DatabaseImpl::new(&data_dir)?.init().await?;
             drop(matrixbot_ezlogin::setup_interactive(&data_dir, &device_name).await?)
         }
         Subcommands::Run { data_dir } => run(&data_dir).await?,
@@ -90,12 +82,10 @@ async fn main() -> Result<()> {
 async fn run(data_dir: &Path) -> Result<()> {
     let (client, sync_helper) = matrixbot_ezlogin::login(data_dir).await?;
 
-    let cfg = Config::new(data_dir.join("anicca.db"));
-    let pool = cfg.create_pool(Runtime::Tokio1)?;
-
+    let database = DatabaseImpl::new(data_dir)?;
     let notify_client = client.clone();
     let data_dir_owned = data_dir.to_path_buf();
-    let notify_pool = pool.clone();
+    let notify_db = database.clone();
     tokio::spawn(async move {
         loop {
             info!("Fetching anicca pkgsupdate.json");
@@ -104,7 +94,7 @@ async fn run(data_dir: &Path) -> Result<()> {
             }
             info!("Sending hourly notifications");
             if let Err(e) =
-                bot::notify(notify_client.clone(), notify_pool.clone(), &data_dir_owned).await
+                bot::notify(notify_client.clone(), notify_db.clone(), &data_dir_owned).await
             {
                 warn!("Unable to send hourly notifications: {}", e);
             }
@@ -129,7 +119,7 @@ async fn run(data_dir: &Path) -> Result<()> {
         .await?;
 
     client.add_event_handler_context(Payload {
-        pool: pool.clone(),
+        db: database.clone(),
         data_dir: data_dir.to_owned(),
     });
     client.add_event_handler(on_message);
@@ -224,13 +214,7 @@ async fn on_message(
     let parsed_args = parse_prefix_and_args(is_direct, &text.body, client.user_id(), &display_name);
     let mut reply = if let Some(args) = parsed_args {
         set_read_marker(room.clone(), event.event_id.clone());
-        command::handle(
-            &args,
-            &context.data_dir,
-            &event.sender,
-            context.pool.clone(),
-        )
-        .await?
+        command::handle(&args, &context.data_dir, &event.sender, context.db.clone()).await?
     } else {
         debug!("Ignoring: Not command: {:?}.", text);
         return Ok(());

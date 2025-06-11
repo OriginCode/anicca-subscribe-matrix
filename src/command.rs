@@ -1,5 +1,4 @@
 use anicca_subscribe::anicca::Anicca;
-use deadpool_sqlite::Pool;
 use eyre::Result;
 use matrix_sdk::ruma::{
     UserId,
@@ -7,7 +6,7 @@ use matrix_sdk::ruma::{
 };
 use std::path::Path;
 
-use crate::bot::{format_update_packages, get_packages};
+use crate::{bot::format_update_packages, db::*};
 
 pub const COMMAND_PREFIX: &str = "!anic";
 
@@ -44,7 +43,7 @@ pub async fn handle(
     args: &[String],
     data_dir: &Path,
     user_id: &UserId,
-    pool: Pool,
+    db: DatabaseImpl,
 ) -> Result<RoomMessageEventContent> {
     if args.is_empty() {
         return Ok(RoomMessageEventContent::notice_html(
@@ -98,7 +97,7 @@ pub async fn handle(
         }
         "ping" => Ok(RoomMessageEventContent::notice_plain("pong".to_string())),
         "list" => {
-            let packages = get_packages(user_id, pool).await?;
+            let packages = db.get_packages(user_id).await?;
             if packages.is_empty() {
                 Ok(RoomMessageEventContent::notice_plain(
                     "No package subscribed.".to_owned(),
@@ -121,19 +120,7 @@ pub async fn handle(
                 ));
             }
             let packages: Vec<String> = args[1..].to_vec();
-            let db_conn = pool.get().await?;
-            let user_id_str = user_id.to_string();
-            db_conn
-                .interact(move |db_conn| {
-                    let mut stmt = db_conn
-                        .prepare("INSERT INTO subscription (user_id, package) VALUES (?1, ?2)")?;
-                    for package in packages {
-                        stmt.execute([&user_id_str, &package])?;
-                    }
-                    Ok::<(), rusqlite::Error>(())
-                })
-                .await
-                .unwrap()?;
+            db.subscribe(user_id, packages).await?;
             Ok(RoomMessageEventContent::notice_plain(
                 "Subscribed.".to_owned(),
             ))
@@ -146,25 +133,13 @@ pub async fn handle(
                 ));
             }
             let packages: Vec<String> = args[1..].to_vec();
-            let db_conn = pool.get().await?;
-            let user_id_str = user_id.to_string();
-            db_conn
-                .interact(move |db_conn| {
-                    let mut stmt = db_conn
-                        .prepare("DELETE FROM subscription WHERE user_id = ?1 AND package = ?2")?;
-                    for package in packages {
-                        stmt.execute([&user_id_str, &package])?;
-                    }
-                    Ok::<(), rusqlite::Error>(())
-                })
-                .await
-                .unwrap()?;
+            db.unsubscribe(user_id, packages).await?;
             Ok(RoomMessageEventContent::notice_plain(
                 "Unsubscribed.".to_owned(),
             ))
         }
         "updates" => {
-            let packages = get_packages(user_id, pool).await?;
+            let packages = db.get_packages(user_id).await?;
             let mut updates = Anicca::get_local_json(data_dir)
                 .await?
                 .get_subscription_updates(&packages)?;
@@ -181,47 +156,18 @@ pub async fn handle(
             }
         }
         "enable-notification" => {
-            let db_conn = pool.get().await?;
-            let user_id_str = user_id.as_str().to_owned();
-            let count: i32 = db_conn
-                .interact(move |db_conn| {
-                    let mut stmt =
-                        db_conn.prepare("SELECT COUNT(*) FROM notification WHERE user_id = ?1")?;
-                    stmt.query_row([&user_id_str], |row| row.get(0))
-                })
-                .await
-                .unwrap()?;
-            if count > 0 {
+            if db.is_notification_enabled(user_id).await? {
                 return Ok(RoomMessageEventContent::notice_plain(
                     "Hourly notification already enabled.".to_owned(),
                 ));
             }
-            let user_id_str = user_id.to_string();
-            db_conn
-                .interact(move |db_conn| {
-                    db_conn.execute(
-                        "INSERT INTO notification (user_id) VALUES (?1)",
-                        [&user_id_str],
-                    )
-                })
-                .await
-                .unwrap()?;
+            db.enable_notification(user_id).await?;
             Ok(RoomMessageEventContent::notice_plain(
                 "Enabled hourly notification.".to_owned(),
             ))
         }
         "disable-notification" => {
-            let db_conn = pool.get().await?;
-            let user_id_str = user_id.to_string();
-            db_conn
-                .interact(move |db_conn| {
-                    db_conn.execute(
-                        "DELETE FROM notification WHERE user_id = ?1",
-                        [&user_id_str],
-                    )
-                })
-                .await
-                .unwrap()?;
+            db.disable_notification(user_id).await?;
             Ok(RoomMessageEventContent::notice_plain(
                 "Hourly notification disabled.".to_owned(),
             ))
