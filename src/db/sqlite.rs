@@ -60,11 +60,14 @@ impl super::Database for SqliteDatabase {
         let user_id_str = user_id.to_string();
         db_conn
             .interact(move |db_conn| {
-                let mut stmt = db_conn
+                let transaction = db_conn.transaction()?;
+                let mut stmt = transaction
                     .prepare("INSERT INTO subscription (user_id, package) VALUES (?1, ?2)")?;
                 for package in packages {
                     stmt.execute([&user_id_str, &package])?;
                 }
+                drop(stmt);
+                transaction.commit()?;
                 Ok::<(), rusqlite::Error>(())
             })
             .await
@@ -77,11 +80,14 @@ impl super::Database for SqliteDatabase {
         let user_id_str = user_id.to_string();
         db_conn
             .interact(move |db_conn| {
-                let mut stmt = db_conn
+                let transaction = db_conn.transaction()?;
+                let mut stmt = transaction
                     .prepare("DELETE FROM subscription WHERE user_id = ?1 AND package = ?2")?;
                 for package in packages {
                     stmt.execute([&user_id_str, &package])?;
                 }
+                drop(stmt);
+                transaction.commit()?;
                 Ok::<(), rusqlite::Error>(())
             })
             .await
