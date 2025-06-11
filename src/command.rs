@@ -78,10 +78,14 @@ pub async fn handle(
         }
         "version" => {
             let version = env!("CARGO_PKG_VERSION");
+            #[cfg(feature = "sqlite")]
+            let backend = "SQLite";
+            #[cfg(feature = "rocksdb")]
+            let backend = "RocksDB";
             Ok(RoomMessageEventContent::notice_html(
                 version.to_owned(),
                 format!(
-                    "<a href=\"https://factoria.origincode.me/OriginCode/anicca-subscribe-matrix/-/tree/v{version}?ref_type=tags\">{version}</a>"
+                    "<a href=\"https://factoria.origincode.me/OriginCode/anicca-subscribe-matrix/-/tree/v{version}?ref_type=tags\">{version}</a> ({backend} backend)",
                 ),
             ))
         }

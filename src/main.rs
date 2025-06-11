@@ -34,7 +34,7 @@ mod db;
 use cli::{Cli, Subcommands};
 use db::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct Payload {
     db: DatabaseImpl,
     data_dir: PathBuf,

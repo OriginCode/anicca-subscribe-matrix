@@ -8,15 +8,13 @@ pub struct SqliteDatabase {
     pool: Pool,
 }
 
-impl SqliteDatabase {
-    pub fn new(data_dir: &Path) -> Result<Self> {
+impl super::Database for SqliteDatabase {
+    fn new(data_dir: &Path) -> Result<Self> {
         let cfg = Config::new(data_dir.join("anicca.db"));
         let pool = cfg.create_pool(Runtime::Tokio1)?;
         Ok(Self { pool })
     }
-}
 
-impl super::Database for SqliteDatabase {
     async fn init(&self) -> Result<()> {
         let db_conn = self.pool.get().await?;
         db_conn
