@@ -22,4 +22,5 @@ pub trait Database: Clone + Sync + Send {
     async fn enable_notification(&self, user_id: &UserId) -> Result<()>;
     async fn disable_notification(&self, user_id: &UserId) -> Result<()>;
     async fn notification_targets(&self) -> Result<Vec<OwnedUserId>>;
+    async fn users(&self) -> Result<Vec<OwnedUserId>>;
 }

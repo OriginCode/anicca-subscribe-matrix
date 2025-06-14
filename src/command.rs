@@ -1,12 +1,16 @@
 use anicca_subscribe::anicca::Anicca;
 use eyre::Result;
-use matrix_sdk::ruma::{
-    UserId,
-    events::room::message::{FormattedBody, RoomMessageEventContent},
+use matrix_sdk::{
+    Room,
+    ruma::{
+        UserId,
+        events::room::message::{FormattedBody, RoomMessageEventContent},
+    },
 };
+use pluralizer::pluralize;
 use std::path::Path;
 
-use crate::{bot::format_update_packages, db::*};
+use crate::{bot::format_update_packages, config::Config, db::*};
 
 pub const COMMAND_PREFIX: &str = "!anic";
 
@@ -40,11 +44,16 @@ pub fn parse_args(text: &str) -> Vec<String> {
 }
 
 pub async fn handle(
-    args: &[String],
+    config: Config,
     data_dir: &Path,
-    user_id: &UserId,
     db: DatabaseImpl,
+    user_id: &UserId,
+    room: Room,
+    args: &[String],
 ) -> Result<RoomMessageEventContent> {
+    let unknown_command =
+        RoomMessageEventContent::notice_plain(format!("Unknown command: {}", args[0]));
+
     if args.is_empty() {
         return Ok(RoomMessageEventContent::notice_html(
             "No command provided. Type `!anic help` for available commands.".to_owned(),
@@ -107,12 +116,10 @@ pub async fn handle(
                     "No package subscribed.".to_owned(),
                 ))
             } else {
-                let package_list = packages.join(", ");
                 Ok(RoomMessageEventContent::notice_plain(format!(
-                    "Subscribed {} package{}: {}",
-                    packages.len(),
-                    if packages.len() >= 2 { "s" } else { "" },
-                    package_list
+                    "Subscribed {}: {}",
+                    pluralize("package", packages.len() as isize, true),
+                    packages.join(", ")
                 )))
             }
         }
@@ -176,9 +183,54 @@ pub async fn handle(
                 "Hourly notification disabled.".to_owned(),
             ))
         }
-        _ => Ok(RoomMessageEventContent::notice_plain(format!(
-            "Unknown command: {}",
-            args[0]
-        ))),
+        "+users" => {
+            if room.is_direct().await? && config.is_admin(user_id) {
+                let users = db.users().await?;
+                let notification_targets = db.notification_targets().await?;
+                Ok(RoomMessageEventContent::notice_plain(format!(
+                    "{}: {}",
+                    pluralize("user", users.len() as isize, true),
+                    users
+                        .iter()
+                        .map(|id| {
+                            if notification_targets.contains(id) {
+                                format!("{} [✓]", id.as_str())
+                            } else {
+                                id.as_str().to_owned()
+                            }
+                        })
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )))
+            } else {
+                Ok(unknown_command)
+            }
+        }
+        "+list" => {
+            if args.len() < 2 {
+                return Ok(RoomMessageEventContent::notice_html(
+                    "Usage: `!anic list-subscriptions [userid]`".to_owned(),
+                    "Usage: <code>!anic list-subscriptions [userid]</code>".to_owned(),
+                ));
+            }
+
+            if room.is_direct().await? && config.is_admin(user_id) {
+                let packages = db.get_packages(&UserId::parse(&args[1])?).await?;
+                if packages.is_empty() {
+                    Ok(RoomMessageEventContent::notice_plain(
+                        "No package subscribed.".to_owned(),
+                    ))
+                } else {
+                    Ok(RoomMessageEventContent::notice_plain(format!(
+                        "Subscribed {}: {}",
+                        pluralize("package", packages.len() as isize, true),
+                        packages.join(", ")
+                    )))
+                }
+            } else {
+                Ok(unknown_command)
+            }
+        }
+        _ => Ok(unknown_command),
     }
 }

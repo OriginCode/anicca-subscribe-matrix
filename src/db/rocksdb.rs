@@ -133,4 +133,20 @@ impl super::Database for RocksDbDatabase {
         })
         .await??)
     }
+
+    async fn users(&self) -> Result<Vec<OwnedUserId>> {
+        let db = self.db.clone();
+        Ok(spawn_blocking(move || {
+            let mut users = Vec::new();
+            let iter = db.iterator(rocksdb::IteratorMode::Start);
+            for item in iter {
+                let key = item?.0;
+                if let Ok(user_id) = str::from_utf8(&key) {
+                    users.push(UserId::parse(user_id).unwrap());
+                }
+            }
+            Ok::<Vec<OwnedUserId>, rocksdb::Error>(users)
+        })
+        .await??)
+    }
 }
