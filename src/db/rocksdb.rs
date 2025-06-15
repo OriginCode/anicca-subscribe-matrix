@@ -81,7 +81,11 @@ impl super::Database for RocksDbDatabase {
             let encoded = bincode::encode_to_vec(&user, self.bincode_config)?;
             let user_id_str = user_id.to_string();
             let db = self.db.clone();
-            spawn_blocking(move || db.put(user_id_str.as_bytes(), encoded)).await??;
+            if user.packages.is_empty() && !user.notification_enabled {
+                spawn_blocking(move || db.delete(user_id_str.as_bytes())).await??;
+            } else {
+                spawn_blocking(move || db.put(user_id_str.as_bytes(), encoded)).await??;
+            }
         }
         Ok(())
     }
@@ -102,12 +106,17 @@ impl super::Database for RocksDbDatabase {
     }
 
     async fn disable_notification(&self, user_id: &UserId) -> Result<()> {
-        let mut user = self.get_user_data_or_create(user_id).await?;
-        user.notification_enabled = false;
-        let encoded = bincode::encode_to_vec(&user, self.bincode_config)?;
-        let user_id_str = user_id.to_string();
-        let db = self.db.clone();
-        spawn_blocking(move || db.put(user_id_str.as_bytes(), encoded)).await??;
+        if let Some(mut user) = self.get_user_data(user_id).await? {
+            user.notification_enabled = false;
+            let encoded = bincode::encode_to_vec(&user, self.bincode_config)?;
+            let user_id_str = user_id.to_string();
+            let db = self.db.clone();
+            if user.packages.is_empty() && !user.notification_enabled {
+                spawn_blocking(move || db.delete(user_id_str.as_bytes())).await??;
+            } else {
+                spawn_blocking(move || db.put(user_id_str.as_bytes(), encoded)).await??;
+            }
+        }
         Ok(())
     }
 
