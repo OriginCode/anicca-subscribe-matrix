@@ -6,6 +6,9 @@ use std::path::PathBuf;
 pub struct Cli {
     #[command(subcommand)]
     pub subcommands: Subcommands,
+    /// Use custom config file
+    #[arg(long, short, value_name = "FILE")]
+    pub config: Option<PathBuf>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -16,7 +19,7 @@ pub enum Subcommands {
         device_name: String,
     },
     /// Run the bot
-    Run { data_dir: PathBuf },
+    Run { data_dir: Option<PathBuf> },
     /// Logout the bot
     Logout { data_dir: PathBuf },
 }

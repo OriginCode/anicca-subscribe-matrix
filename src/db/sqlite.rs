@@ -154,4 +154,28 @@ impl super::Database for SqliteDatabase {
             .await
             .unwrap()?)
     }
+
+    async fn users(&self) -> Result<Vec<OwnedUserId>> {
+        let db_conn = self.pool.get().await?;
+        Ok(db_conn
+            .interact(|db_conn| {
+                let mut stmt = db_conn.prepare(
+                    "SELECT DISTINCT user_id
+                     FROM subscription
+                     UNION
+                     SELECT user_id
+                     FROM notification",
+                )?;
+                let mut rows = stmt.query([])?;
+
+                let mut users = Vec::new();
+                while let Some(row) = rows.next()? {
+                    let user_id = UserId::parse(row.get::<_, String>(0)?).unwrap();
+                    users.push(user_id);
+                }
+                Ok::<Vec<OwnedUserId>, rusqlite::Error>(users)
+            })
+            .await
+            .unwrap()?)
+    }
 }

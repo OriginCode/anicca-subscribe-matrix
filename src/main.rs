@@ -1,6 +1,6 @@
 use clap::Parser;
 use command::parse_prefix_and_args;
-use eyre::Result;
+use eyre::{Result, eyre};
 use matrix_sdk::{
     Client, Room, RoomState,
     config::SyncSettings,
@@ -29,15 +29,18 @@ use tracing_subscriber::{EnvFilter, prelude::*};
 mod bot;
 mod cli;
 mod command;
+mod config;
 mod db;
 
 use cli::{Cli, Subcommands};
+use config::Config;
 use db::*;
 
 #[derive(Clone)]
 struct Payload {
     db: DatabaseImpl,
     data_dir: PathBuf,
+    config: Config,
 }
 
 #[tokio::main]
@@ -72,14 +75,23 @@ async fn main() -> Result<()> {
             db::DatabaseImpl::new(&data_dir)?.init().await?;
             drop(matrixbot_ezlogin::setup_interactive(&data_dir, &device_name).await?)
         }
-        Subcommands::Run { data_dir } => run(&data_dir).await?,
+        Subcommands::Run { data_dir } => {
+            let config = Config::load(args.config.as_deref()).await;
+            let data_dir = data_dir
+                .as_deref()
+                .or(config.data_dir.as_deref())
+                .ok_or_else(|| {
+                    eyre!("No data directory specified, append data directory path to the argument or add `data_dir` field to the config file.")
+                })?;
+            run(data_dir, config.clone()).await?;
+        }
         Subcommands::Logout { data_dir } => matrixbot_ezlogin::logout(&data_dir).await?,
     }
 
     Ok(())
 }
 
-async fn run(data_dir: &Path) -> Result<()> {
+async fn run(data_dir: &Path, config: Config) -> Result<()> {
     let (client, sync_helper) = matrixbot_ezlogin::login(data_dir).await?;
 
     let database = DatabaseImpl::new(data_dir)?;
@@ -121,6 +133,7 @@ async fn run(data_dir: &Path) -> Result<()> {
     client.add_event_handler_context(Payload {
         db: database.clone(),
         data_dir: data_dir.to_owned(),
+        config,
     });
     client.add_event_handler(on_message);
     client.add_event_handler(on_utd);
@@ -214,7 +227,15 @@ async fn on_message(
     let parsed_args = parse_prefix_and_args(is_direct, &text.body, client.user_id(), &display_name);
     let mut reply = if let Some(args) = parsed_args {
         set_read_marker(room.clone(), event.event_id.clone());
-        command::handle(&args, &context.data_dir, &event.sender, context.db.clone()).await?
+        command::handle(
+            context.config.clone(),
+            &context.data_dir,
+            context.db.clone(),
+            &event.sender,
+            room.clone(),
+            &args,
+        )
+        .await?
     } else {
         debug!("Ignoring: Not command: {:?}.", text);
         return Ok(());
