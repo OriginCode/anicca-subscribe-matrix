@@ -2,10 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.0 - 2025-07-19
+### Chore
+- Update deps
+
+### Features
+- Add config file and admin commands
+- Add database tests
+
 ## 0.3.0 - 2025-06-11
 ### Chore
 - Update deps
 - Update deps
+- Release
 
 ### Features
 - Add rocksdb backend
