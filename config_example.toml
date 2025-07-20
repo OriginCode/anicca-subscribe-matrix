@@ -1,2 +1,2 @@
-admin_id = ["@i:origincode.me", "@origincode:matrix.org"]
+admin_ids = ["@i:origincode.me", "@origincode:matrix.org"]
 data_dir = "./data"

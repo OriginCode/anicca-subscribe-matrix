@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
             drop(matrixbot_ezlogin::setup_interactive(&data_dir, &device_name).await?)
         }
         Subcommands::Run { data_dir } => {
-            let config = Config::load(args.config.as_deref()).await;
+            let config = Config::load(args.config).await;
             let data_dir = data_dir
                 .as_deref()
                 .or(config.data_dir.as_deref())

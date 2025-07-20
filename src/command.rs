@@ -207,14 +207,14 @@ pub async fn handle(
             }
         }
         "+list" => {
-            if args.len() < 2 {
-                return Ok(RoomMessageEventContent::notice_html(
-                    "Usage: `!anic list-subscriptions [userid]`".to_owned(),
-                    "Usage: <code>!anic list-subscriptions [userid]</code>".to_owned(),
-                ));
-            }
-
             if room.is_direct().await? && config.is_admin(user_id) {
+                if args.len() < 2 {
+                    return Ok(RoomMessageEventContent::notice_html(
+                        "Usage: `!anic list [userid]`".to_owned(),
+                        "Usage: <code>!anic list [userid]</code>".to_owned(),
+                    ));
+                }
+
                 let packages = db.get_packages(&UserId::parse(&args[1])?).await?;
                 if packages.is_empty() {
                     Ok(RoomMessageEventContent::notice_plain(

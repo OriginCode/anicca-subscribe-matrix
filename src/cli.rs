@@ -7,8 +7,8 @@ pub struct Cli {
     #[command(subcommand)]
     pub subcommands: Subcommands,
     /// Use custom config file
-    #[arg(long, short, value_name = "FILE")]
-    pub config: Option<PathBuf>,
+    #[arg(long, short, value_name = "FILE", default_value = "./config.toml")]
+    pub config: PathBuf,
 }
 
 #[derive(Subcommand, Debug)]

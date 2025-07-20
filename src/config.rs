@@ -19,13 +19,9 @@ impl Default for Config {
 }
 
 impl Config {
-    pub async fn load(path: Option<&Path>) -> Self {
-        let cfg = toml::from_str(
-            &fs::read_to_string(path.unwrap_or(Path::new("./config.toml")))
-                .await
-                .unwrap_or_default(),
-        )
-        .unwrap_or_default();
+    pub async fn load<P: AsRef<Path>>(path: P) -> Self {
+        let cfg = toml::from_str(&fs::read_to_string(path.as_ref()).await.unwrap_or_default())
+            .unwrap_or_default();
         dbg!(&cfg);
         cfg
     }
