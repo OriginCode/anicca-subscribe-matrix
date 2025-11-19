@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 rusqlite = "0.37"
-rocksdb = "0.23"
+rocksdb = "0.24"
 bincode = "2.0"
 eyre = "0.6"
 color-eyre = "0.6"
