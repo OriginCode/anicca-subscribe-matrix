@@ -1,7 +1,12 @@
+## 0.4.2 - 2026-04-10
+### Chore
+- Update deps, migrate from bincode to wincode
+
 ## 0.4.1 - 2025-11-19
 ### Chore
 - Update deps
 - Update deps
+- Release
 
 ### Refactor
 - Set default value for config path
