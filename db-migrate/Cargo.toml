@@ -6,6 +6,6 @@ edition = "2024"
 [dependencies]
 rusqlite = "0.37"
 rocksdb = "0.24"
-bincode = "2.0"
+wincode = { version = "0.5", features = ["derive", "alloc"] }
 eyre = "0.6"
 color-eyre = "0.6"

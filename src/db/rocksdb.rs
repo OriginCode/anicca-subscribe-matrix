@@ -1,17 +1,26 @@
-use bincode::{Decode, Encode, config};
 use eyre::Result;
 use matrix_sdk::ruma::{OwnedUserId, UserId};
 use rocksdb::{DBWithThreadMode, MultiThreaded, Options};
 use std::{path::Path, sync::Arc};
 use tokio::task::spawn_blocking;
+use wincode::{SchemaRead, SchemaWrite, config};
+
+type WincodeConfig = config::Configuration<
+    true,
+    { usize::MAX },
+    wincode::len::BincodeLen,
+    wincode::int_encoding::LittleEndian,
+    wincode::int_encoding::VarInt,
+    u32,
+>;
 
 #[derive(Clone)]
 pub struct RocksDbDatabase {
     db: Arc<DBWithThreadMode<MultiThreaded>>,
-    bincode_config: config::Configuration,
+    wincode_config: WincodeConfig,
 }
 
-#[derive(Encode, Decode, Debug, Clone, Default)]
+#[derive(SchemaWrite, SchemaRead, Debug, Clone, Default)]
 pub struct User {
     packages: Vec<String>,
     notification_enabled: bool,
@@ -23,8 +32,10 @@ impl RocksDbDatabase {
         let db = self.db.clone();
         let data = spawn_blocking(move || db.get(user_id_str.as_bytes())).await??;
         if let Some(data) = data {
-            let (user, _) = bincode::decode_from_slice::<User, _>(&data, self.bincode_config)?;
-            Ok(Some(user))
+            Ok(Some(config::deserialize::<User, WincodeConfig>(
+                &data,
+                self.wincode_config,
+            )?))
         } else {
             Ok(None)
         }
@@ -47,8 +58,10 @@ impl super::Database for RocksDbDatabase {
             &opts,
             data_dir.join("anicca"),
         )?);
-        let bincode_config = config::standard();
-        Ok(Self { db, bincode_config })
+        let wincode_config = config::Configuration::default()
+            .disable_preallocation_size_limit()
+            .with_varint_encoding();
+        Ok(Self { db, wincode_config })
     }
 
     async fn init(&self) -> Result<()> {
@@ -68,7 +81,7 @@ impl super::Database for RocksDbDatabase {
         let mut user = self.get_user_data_or_create(user_id).await?;
         user.packages.extend(packages);
         user.packages.dedup();
-        let encoded = bincode::encode_to_vec(&user, self.bincode_config)?;
+        let encoded = config::serialize(&user, self.wincode_config)?;
         let user_id_str = user_id.to_string();
         let db = self.db.clone();
         spawn_blocking(move || db.put(user_id_str.as_bytes(), encoded)).await??;
@@ -78,7 +91,7 @@ impl super::Database for RocksDbDatabase {
     async fn unsubscribe(&self, user_id: &UserId, packages: Vec<String>) -> Result<()> {
         if let Some(mut user) = self.get_user_data(user_id).await? {
             user.packages.retain(|pkg| !packages.contains(pkg));
-            let encoded = bincode::encode_to_vec(&user, self.bincode_config)?;
+            let encoded = config::serialize(&user, self.wincode_config)?;
             let user_id_str = user_id.to_string();
             let db = self.db.clone();
             if user.packages.is_empty() && !user.notification_enabled {
@@ -98,7 +111,7 @@ impl super::Database for RocksDbDatabase {
     async fn enable_notification(&self, user_id: &UserId) -> Result<()> {
         let mut user = self.get_user_data_or_create(user_id).await?;
         user.notification_enabled = true;
-        let encoded = bincode::encode_to_vec(&user, self.bincode_config)?;
+        let encoded = config::serialize(&user, self.wincode_config)?;
         let user_id_str = user_id.to_string();
         let db = self.db.clone();
         spawn_blocking(move || db.put(user_id_str.as_bytes(), encoded)).await??;
@@ -108,7 +121,7 @@ impl super::Database for RocksDbDatabase {
     async fn disable_notification(&self, user_id: &UserId) -> Result<()> {
         if let Some(mut user) = self.get_user_data(user_id).await? {
             user.notification_enabled = false;
-            let encoded = bincode::encode_to_vec(&user, self.bincode_config)?;
+            let encoded = config::serialize(&user, self.wincode_config)?;
             let user_id_str = user_id.to_string();
             let db = self.db.clone();
             if user.packages.is_empty() && !user.notification_enabled {
@@ -122,15 +135,15 @@ impl super::Database for RocksDbDatabase {
 
     async fn notification_targets(&self) -> Result<Vec<OwnedUserId>> {
         let db = self.db.clone();
-        let bincode_config = self.bincode_config;
+        let wincode_config = self.wincode_config;
         Ok(spawn_blocking(move || {
             let mut targets = Vec::new();
             let iter = db.iterator(rocksdb::IteratorMode::Start);
             for item in iter {
                 let (key, val) = item?;
                 if let Ok(user_id) = str::from_utf8(&key) {
-                    if let Ok((user, _)) =
-                        bincode::decode_from_slice::<User, _>(&val, bincode_config)
+                    if let Ok(user) =
+                        config::deserialize::<User, WincodeConfig>(&val, wincode_config)
                     {
                         if user.notification_enabled {
                             targets.push(UserId::parse(user_id).unwrap());

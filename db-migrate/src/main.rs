@@ -1,10 +1,19 @@
-use bincode::{Decode, Encode, config};
 use eyre::{Result, bail};
 use rocksdb::{DB, IteratorMode, Options};
 use rusqlite::Connection;
 use std::path::Path;
+use wincode::{SchemaRead, SchemaWrite, config};
 
-#[derive(Encode, Decode, Debug, Clone)]
+type WincodeConfig = config::Configuration<
+    true,
+    { usize::MAX },
+    wincode::len::BincodeLen,
+    wincode::int_encoding::LittleEndian,
+    wincode::int_encoding::VarInt,
+    u32,
+>;
+
+#[derive(SchemaRead, SchemaWrite, Debug, Clone)]
 struct User {
     packages: Vec<String>,
     notification_enabled: bool,
@@ -16,7 +25,9 @@ fn sqlite_to_rocksdb<T: AsRef<Path>>(path: T) -> Result<()> {
     let mut opts = Options::default();
     opts.create_if_missing(true);
     let rocksdb_db = DB::open(&opts, path.join("anicca"))?;
-    let bincode_config = config::standard();
+    let wincode_config = config::Configuration::default()
+        .disable_preallocation_size_limit()
+        .with_varint_encoding();
 
     let mut stmt = sqlite_db.prepare("SELECT DISTINCT user_id FROM subscription")?;
     let rows = stmt.query_map([], |row| row.get(0))?;
@@ -45,7 +56,7 @@ fn sqlite_to_rocksdb<T: AsRef<Path>>(path: T) -> Result<()> {
             notification_enabled: notification_users.contains(&user_id),
         };
 
-        let encoded = bincode::encode_to_vec(&user, bincode_config)?;
+        let encoded = config::serialize(&user, wincode_config)?;
         rocksdb_db.put(user_id.as_bytes(), encoded)?;
     }
 
@@ -58,7 +69,9 @@ fn rocksdb_to_sqlite<T: AsRef<Path>>(path: T) -> Result<()> {
     let mut opts = Options::default();
     opts.create_if_missing(true);
     let rocksdb_db = DB::open(&opts, path.join("anicca"))?;
-    let bincode_config = config::standard();
+    let wincode_config = config::Configuration::default()
+        .disable_preallocation_size_limit()
+        .with_varint_encoding();
 
     sqlite_db.execute(
         "CREATE TABLE IF NOT EXISTS subscription ( user_id TEXT NOT NULL, package TEXT NOT NULL )",
@@ -73,7 +86,7 @@ fn rocksdb_to_sqlite<T: AsRef<Path>>(path: T) -> Result<()> {
     for item in iter {
         let (key, val) = item?;
         let user_id = str::from_utf8(&key)?;
-        let (user, _) = bincode::decode_from_slice::<User, _>(&val, bincode_config)?;
+        let user = config::deserialize::<User, WincodeConfig>(&val, wincode_config)?;
 
         let mut stmt =
             sqlite_db.prepare("INSERT INTO subscription (user_id, package) VALUES (?1, ?2)")?;
