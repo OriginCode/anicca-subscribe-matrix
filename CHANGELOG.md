@@ -1,6 +1,15 @@
+## 0.5.0 - 2026-11-23
+### Features
+- Add check command to check updates for specific packages
+
+### Refactor
+- Update deps, remove sqlite backend
+- Sort output for list
+
 ## 0.4.2 - 2026-04-10
 ### Chore
 - Update deps, migrate from bincode to wincode
+- Release
 
 ## 0.4.1 - 2025-11-19
 ### Chore
