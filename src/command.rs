@@ -106,7 +106,8 @@ pub async fn handle(
         }
         "ping" => Ok(RoomMessageEventContent::notice_plain("pong".to_string())),
         "list" => {
-            let packages = db.get_packages(user_id).await?;
+            let mut packages = db.get_packages(user_id).await?;
+            packages.sort();
             if packages.is_empty() {
                 Ok(RoomMessageEventContent::notice_plain(
                     "No package subscribed.".to_owned(),
