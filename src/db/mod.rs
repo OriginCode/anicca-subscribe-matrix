@@ -2,14 +2,8 @@ use eyre::Result;
 use matrix_sdk::ruma::{OwnedUserId, UserId};
 use std::path::Path;
 
-#[cfg(feature = "rocksdb")]
 mod rocksdb;
-#[cfg(feature = "sqlite")]
-mod sqlite;
 
-#[cfg(feature = "sqlite")]
-pub type DatabaseImpl = sqlite::SqliteDatabase;
-#[cfg(feature = "rocksdb")]
 pub type DatabaseImpl = rocksdb::RocksDbDatabase;
 
 pub trait Database: Clone + Sync + Send {

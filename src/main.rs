@@ -10,7 +10,7 @@ use matrix_sdk::{
         OwnedEventId,
         api::client::filter::FilterDefinition,
         events::{
-            relation::{InReplyTo, Thread},
+            relation::{Reply, Thread},
             room::{
                 encrypted::SyncRoomEncryptedEvent,
                 member::{MembershipState, StrippedRoomMemberEvent, SyncRoomMemberEvent},
@@ -248,9 +248,9 @@ async fn on_message(
             thread.event_id,
             event.event_id.to_owned(),
         ))),
-        _ => Some(Relation::Reply {
-            in_reply_to: InReplyTo::new(event.event_id.to_owned()),
-        }),
+        _ => Some(Relation::Reply(Reply::with_event_id(
+            event.event_id.to_owned(),
+        ))),
     };
 
     tokio::spawn(async move {
