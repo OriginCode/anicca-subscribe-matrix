@@ -145,6 +145,29 @@ pub async fn handle(
                 "Unsubscribed.".to_owned(),
             ))
         }
+        "check" => {
+            if args.len() < 2 {
+                return Ok(RoomMessageEventContent::notice_html(
+                    "Usage: `!anic check <packages>`".to_owned(),
+                    "Usage: <code>!anic check &lt;packages&gt;</code>".to_owned(),
+                ));
+            }
+            let packages: Vec<String> = args[1..].to_vec();
+            let mut updates = Anicca::get_local_json(data_dir)
+                .await?
+                .get_subscription_updates(&packages)?;
+            if updates.is_empty() {
+                Ok(RoomMessageEventContent::notice_plain(
+                    "No package update found.".to_owned(),
+                ))
+            } else {
+                let (plain_updates, html_updates) = format_update_packages(&mut updates);
+                Ok(RoomMessageEventContent::notice_html(
+                    plain_updates,
+                    html_updates,
+                ))
+            }
+        }
         "updates" => {
             let packages = db.get_packages(user_id).await?;
             let mut updates = Anicca::get_local_json(data_dir)
