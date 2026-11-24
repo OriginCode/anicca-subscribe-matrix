@@ -141,14 +141,12 @@ impl super::Database for RocksDbDatabase {
             let iter = db.iterator(rocksdb::IteratorMode::Start);
             for item in iter {
                 let (key, val) = item?;
-                if let Ok(user_id) = str::from_utf8(&key) {
-                    if let Ok(user) =
+                if let Ok(user_id) = str::from_utf8(&key)
+                    && let Ok(user) =
                         config::deserialize::<User, WincodeConfig>(&val, wincode_config)
-                    {
-                        if user.notification_enabled {
-                            targets.push(UserId::parse(user_id).unwrap());
-                        }
-                    }
+                    && user.notification_enabled
+                {
+                    targets.push(UserId::parse(user_id).unwrap());
                 }
             }
             Ok::<Vec<OwnedUserId>, rocksdb::Error>(targets)

@@ -21,7 +21,7 @@ pub fn format_update_packages(packages: &mut [Package]) -> (String, String) {
                 package.before,
                 package.after,
                 if package.warnings.len() > 1 {
-                    format!(" ({})", &package.warnings[1])
+                    format!(" ({})", package.warnings[1])
                 } else {
                     String::new()
                 }
