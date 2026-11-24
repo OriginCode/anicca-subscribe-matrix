@@ -13,6 +13,18 @@ use std::path::Path;
 use crate::{bot::format_update_packages, config::Config, db::*};
 
 pub const COMMAND_PREFIX: &str = "!anic";
+pub const HTML_HELP_MESSAGE: &str = "Available commands:<br/>\
+                                     Prefixing commands with <code>!anic</code> is not required for direct messages.<br/>\
+                                     <code>!anic help</code> - Show this help message<br/>\
+                                     <code>!anic list</code> - List subscribed packages<br/>\
+                                     <code>!anic subscribe &lt;packages&gt;</code> - Subscribe to packages<br/>\
+                                     <code>!anic unsubscribe &lt;packages&gt;</code> - Unsubscribe from packages<br/>\
+                                     <code>!anic check &lt;packages&gt;</code> - Check updates for specific packages<br/>\
+                                     <code>!anic updates</code> - Show package updates<br/>\
+                                     <code>!anic enable-notification</code> - Enable hourly notification<br/>\
+                                     <code>!anic disable-notification</code> - Disable hourly notification<br/>\
+                                     <code>!anic version</code> - Show the bot version<br/>\
+                                     <code>!anic changelog</code> - Show the bot changelog";
 
 pub fn parse_prefix_and_args(
     is_direct: bool,
@@ -63,18 +75,7 @@ pub async fn handle(
 
     match args[0].as_str() {
         "help" => {
-            let html_help_message = "Available commands:<br/>\
-                                Prefixing commands with <code>!anic</code> is not required for direct messages.<br/>\
-                                <code>!anic help</code> - Show this help message<br/>\
-                                <code>!anic list</code> - List subscribed packages<br/>\
-                                <code>!anic subscribe &lt;packages&gt;</code> - Subscribe to packages<br/>\
-                                <code>!anic unsubscribe &lt;packages&gt;</code> - Unsubscribe from packages<br/>\
-                                <code>!anic updates</code> - Show package updates<br/>\
-                                <code>!anic enable-notification</code> - Enable hourly notification<br/>\
-                                <code>!anic disable-notification</code> - Disable hourly notification<br/>\
-                                <code>!anic version</code> - Show the bot version<br/>\
-                                <code>!anic changelog</code> - Show the bot changelog";
-            let plain_help_message = html_help_message
+            let plain_help_message = HTML_HELP_MESSAGE
                 .replace("<code>", "`")
                 .replace("</code>", "`")
                 .replace("&lt;", "<")
@@ -82,7 +83,7 @@ pub async fn handle(
                 .replace("<br/>", "\n");
             Ok(RoomMessageEventContent::notice_html(
                 plain_help_message,
-                html_help_message.to_owned(),
+                HTML_HELP_MESSAGE.to_owned(),
             ))
         }
         "version" => {
