@@ -3,6 +3,7 @@ use matrix_sdk::{
     Client, Room,
     ruma::{UserId, events::room::message::RoomMessageEventContent},
 };
+use pluralizer::pluralize;
 use std::path::Path;
 use tracing::info;
 
@@ -30,7 +31,7 @@ pub fn format_update_packages(packages: &mut [Package]) -> (String, String) {
     let html_output = format!(
         "<strong>Found {} update{}</strong><br/><ul>{}</ul>",
         packages.len(),
-        if packages.len() >= 2 { "s" } else { "" },
+        pluralize("package", packages.len() as isize, true),
         packages_list
     );
     let plain_output = html_output
